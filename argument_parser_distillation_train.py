@@ -131,7 +131,7 @@ def parse_args():
     parser.add_argument('--job_type', default='fine_tune_dino_v2', type=str)
     parser.add_argument('--log_interval', default=10, type=int)
     parser.add_argument('--group', default='vit_base', type=str)
-    parser.add_argument('--wandb_entity', default='ananthu-phd', type=str)
+    parser.add_argument('--wandb_entity', default='', type=str)
     parser.add_argument('--wandb_mode', default='online', type=str, choices=['online', 'offline'])
 
     # * Resume training params
