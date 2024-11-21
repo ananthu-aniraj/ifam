@@ -108,6 +108,17 @@ def concat_all_gather(tensor):
     return output
 
 
+def concat_all_gather_with_gradient(tensor):
+    """
+    Performs all_gather operation on the provided tensors. with gradient
+    """
+    tensor = tensor.contiguous()  # Make sure the tensor is contiguous : https://github.com/pytorch/pytorch/issues/73515
+    tensors_gather = [torch.ones_like(tensor) for _ in range(torch.distributed.get_world_size())]
+    torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
+    output = torch.cat(tensors_gather, dim=0)
+    return output
+
+
 def multi_gpu_check():
     """
     Check if there are multiple GPUs available for DDP

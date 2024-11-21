@@ -458,25 +458,17 @@ def load_model_2_stage(args, dataset_test, num_cls):
     else:
         base_model_1 = load_model_arch_2_stage(args, 1)
         base_model_2 = load_model_arch_2_stage(args, 2)
-        if not args.attribute_prediction:
-            model = FullTwoStageModelDoubleClassify(base_model_1, base_model_2, num_classes=num_cls,
-                                                    return_transformer_qkv=False,
-                                                    num_landmarks=args.num_parts,
-                                                    gumbel_softmax=args.gumbel_softmax,
-                                                    softmax_temperature=args.softmax_temperature,
-                                                    gumbel_softmax_hard=args.gumbel_softmax_hard,
-                                                    part_dropout=args.part_dropout,
-                                                    part_dropout_stage_2=args.part_dropout_stage_2,
-                                                    part_logits_threshold=part_logits_threshold,
-                                                    use_soft_masks=args.use_soft_masks)
-        else:
-            num_att_per_part = dataset_test.num_attributes_per_part_idx
-            model = FullTwoStageModelAttributes(base_model_1, base_model_2, num_landmarks=args.num_parts,
-                                                num_att_per_part=num_att_per_part,
-                                                return_transformer_qkv=False, gumbel_softmax=args.gumbel_softmax,
+
+        model = FullTwoStageModelDoubleClassify(base_model_1, base_model_2, num_classes=num_cls,
+                                                return_transformer_qkv=False,
+                                                num_landmarks=args.num_parts,
+                                                gumbel_softmax=args.gumbel_softmax,
                                                 softmax_temperature=args.softmax_temperature,
                                                 gumbel_softmax_hard=args.gumbel_softmax_hard,
-                                                dropout_rate=args.part_dropout, use_part_attention=args.use_part_attention)
+                                                part_dropout=args.part_dropout,
+                                                part_dropout_stage_2=args.part_dropout_stage_2,
+                                                part_logits_threshold=part_logits_threshold,
+                                                use_soft_masks=args.use_soft_masks)
     return model
 
 

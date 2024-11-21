@@ -10,3 +10,4 @@ from .cub_part_attributes import *
 from .cxr import *
 from .waterbirds_dataset import *
 from .nabirds_subset_cub import *
+from .cub_dataset_seg import *

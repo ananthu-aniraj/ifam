@@ -4,13 +4,16 @@ From: https://github.com/zxhuang1698/interpretability-by-parts/blob/master/src/c
 # pytorch & misc
 import torch
 import torchvision.transforms as transforms
-from data_sets import FineGrainedBirdClassificationParts, PartImageNetDataset, Flowers102Seg
+
+from data_sets import FineGrainedBirdClassificationParts, PartImageNetDataset, Flowers102Seg, CUBDatasetSeg
 from load_model import load_model_2_stage
 import argparse
 import copy
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 from engine.eval_interpretability_nmi_ari_keypoint import eval_nmi_ari, eval_kpr
 from engine.eval_fg_bg import FgBgIoU
-from utils.training_utils.engine_utils import load_state_dict_pdisco
+from utils.training_utils.engine_utils import load_state_dict_snapshot
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -21,6 +24,7 @@ def parse_args():
     )
     parser.add_argument('--model_arch', default='resnet50', type=str,
                         help='pick model architecture')
+    parser.add_argument('--use_hf_transformers', default=False, action='store_true')
     # Data
     parser.add_argument('--data_path',
                         help='directory that contains cub files, must'
@@ -57,6 +61,12 @@ def parse_args():
     # Model path
     parser.add_argument('--model_path', default=None, type=str)
 
+    # Use soft masks for second stage
+    parser.add_argument('--use_soft_masks', default=False, action='store_true')
+
+    # Use part logit thresholds (only for evaluation)
+    parser.add_argument('--part_logits_threshold_path', default="", type=str)
+
     args = parser.parse_args()
     return args
 
@@ -73,6 +83,14 @@ def main(args):
     resize_transform_mask = transforms.Resize(size=args.image_size, interpolation=transforms.InterpolationMode.NEAREST)
     center_crop_transform = transforms.CenterCrop(size=args.image_size)
     def_transform = transforms.ToTensor()
+
+    data_transforms_alb = A.Compose([
+        A.SmallestMaxSize(max_size=args.image_size),
+        A.CropNonEmptyMaskIfExists(p=1, height=args.image_size, width=args.image_size),
+        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        ToTensorV2()
+    ])
+
     if "vit" in args.model_arch:
         if not args.center_crop:
             raise ValueError('ViT models require center crop.')
@@ -93,6 +111,10 @@ def main(args):
                                                        train=False, transform=data_transforms, resize=args.image_size,
                                                        center_crop=args.center_crop,
                                                        image_sub_path=args.image_sub_path)
+    elif args.dataset == 'cub_seg':
+        cub_path = args.data_path
+        # define dataset and loader
+        eval_data = CUBDatasetSeg(cub_path, transform=data_transforms_alb, mode='test', image_sub_path=args.image_sub_path)
     elif args.dataset == 'part_imagenet':
         # define dataset and loader
         eval_data = PartImageNetDataset(data_path=args.data_path, image_sub_path=args.image_sub_path,
@@ -124,7 +146,7 @@ def main(args):
     net = load_model_2_stage(args, eval_data, num_cls)
     snapshot_data = torch.load(args.model_path, map_location=torch.device('cpu'), weights_only=True)
     if 'model_state' in snapshot_data:
-        _, state_dict = load_state_dict_pdisco(snapshot_data)
+        _, state_dict = load_state_dict_snapshot(snapshot_data)
     else:
         state_dict = copy.deepcopy(snapshot_data)
     net.load_state_dict(state_dict, strict=True)
@@ -153,7 +175,7 @@ def main(args):
         print('Evaluation finished.')
 
     elif mode == 'fg_bg':
-        if args.dataset != 'flowers102seg':
+        if args.dataset not in ['cub_seg', 'flowers102seg']:
             raise ValueError('Dataset not supported.')
         iou_calculator = FgBgIoU(net, eval_loader, device=device)
         iou_calculator.calculate_iou(args.model_path)

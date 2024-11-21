@@ -11,15 +11,6 @@ def parse_args():
     parser.add_argument('--use_hf_transformers', default=False, action='store_true')
     parser.add_argument('--use_torchvision_resnet_model', default=False, action='store_true')
 
-    # Attribute Prediction
-    parser.add_argument('--attribute_prediction', default=False, action='store_true')
-    parser.add_argument('--use_image_level_attributes', default=False, action='store_true')
-    parser.add_argument('--load_non_part_attributes', default=False, action='store_true')
-    parser.add_argument('--attribute_prediction_loss_type', default="bce", type=str)
-
-    # Part Attention
-    parser.add_argument('--use_part_attention', default=False, action='store_true')
-
     # Data
     parser.add_argument('--data_path',
                         help='directory that contains cub files', required=True)

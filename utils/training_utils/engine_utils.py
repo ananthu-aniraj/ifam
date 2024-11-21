@@ -57,7 +57,7 @@ class ProgressMeter(object):
         print(' '.join(entries))
 
 
-def load_state_dict_pdisco(snapshot_data):
+def load_state_dict_snapshot(snapshot_data):
     """Load state dict of a snapshot.
 
     Args:

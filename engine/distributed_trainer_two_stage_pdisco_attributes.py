@@ -15,7 +15,7 @@ from utils.training_utils.snapshot_class import Snapshot
 from utils.data_utils.reversible_affine_transform import generate_affine_trans_params
 from utils.training_utils.ddp_utils import ddp_setup, set_seeds
 from utils.visualize_att_maps import VisualizeAttentionMaps
-from utils.training_utils.engine_utils import load_state_dict_pdisco, AverageMeter
+from utils.training_utils.engine_utils import load_state_dict_snapshot, AverageMeter
 from utils.wandb_params import init_wandb
 from losses import *
 
@@ -256,7 +256,7 @@ class PDiscoTrainerTwoStageAttributes:
             print("Snapshot not found. Training model from scratch")
             return
 
-        snapshot, state_dict = load_state_dict_pdisco(snapshot_data)
+        snapshot, state_dict = load_state_dict_snapshot(snapshot_data)
         self.model.load_state_dict(state_dict)
         if self.eval_only:
             return

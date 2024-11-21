@@ -117,7 +117,8 @@ def layer_group_matcher_pdisco_2_stage(args, model):
     :param model: Model to be trained
     :return: param_groups: Parameters grouped into different groups
     """
-    scratch_layers = ["head", "head_norm", "fc_norm", "fc_class_landmarks"]
+    scratch_layers = ["fc_class_landmarks"]
+    scratch_layers_stage_2 = ["head", "head_norm", "fc_norm"]
     modulation_layers = ["modulation"]
     finer_layers = ["fc_landmarks"]
     finer_layers_no_wd = ["constant_tensor", "softmax_temperature", "landmark_norm"]
@@ -132,6 +133,8 @@ def layer_group_matcher_pdisco_2_stage(args, model):
     stage_2_layers = ["stage_2"]
     scratch_parameters = []
     scratch_parameters_no_wd = []
+    scratch_parameters_stage_2 = []
+    scratch_parameters_stage_2_no_wd = []
     modulation_parameters = []
     stage_2_parameters_wd = []
     stage_2_parameters_no_wd = []
@@ -148,6 +151,14 @@ def layer_group_matcher_pdisco_2_stage(args, model):
                 scratch_parameters_no_wd.append(p)
             else:
                 scratch_parameters.append(p)
+            p.requires_grad = True
+
+        elif any(x in name for x in scratch_layers_stage_2):
+            # print("scratch layer_name: " + name)
+            if p.ndim == 1:
+                scratch_parameters_stage_2_no_wd.append(p)
+            else:
+                scratch_parameters_stage_2.append(p)
             p.requires_grad = True
 
         elif any(x in name for x in modulation_layers):
@@ -205,13 +216,16 @@ def layer_group_matcher_pdisco_2_stage(args, model):
 
     param_groups = [{'params': backbone_parameters_wd, 'lr': args.lr},
                     {'params': no_weight_decay_params, 'lr': args.lr, 'weight_decay': 0.0},
-                    {'params': no_weight_decay_params_stage_2, 'lr': args.lr, 'weight_decay': 0.0},
+                    {'params': no_weight_decay_params_stage_2, 'lr': args.lr * args.stage_two_lr_factor,
+                     'weight_decay': 0.0},
                     {'params': stage_2_parameters_wd, 'lr': args.lr * args.stage_two_lr_factor},
                     {'params': stage_2_parameters_no_wd, 'lr': args.lr * args.stage_two_lr_factor, 'weight_decay': 0.0},
                     {'params': finer_parameters, 'lr': args.lr * args.finer_lr_factor, 'weight_decay': 0.0},
                     {'params': finer_parameters_no_wd, 'lr': args.lr * args.finer_lr_factor, 'weight_decay': 0.0},
                     {'params': modulation_parameters, 'lr': args.lr * args.modulation_lr_factor, 'weight_decay': 0.0},
                     {'params': scratch_parameters, 'lr': args.lr * args.scratch_lr_factor},
-                    {'params': scratch_parameters_no_wd, 'lr': args.lr * args.scratch_lr_factor, 'weight_decay': 0.0}]
+                    {'params': scratch_parameters_no_wd, 'lr': args.lr * args.scratch_lr_factor, 'weight_decay': 0.0},
+                    {'params': scratch_parameters_stage_2, 'lr': args.lr * args.scratch_lr_factor},
+                    {'params': scratch_parameters_stage_2_no_wd, 'lr': args.lr * args.scratch_lr_factor, 'weight_decay': 0.0}]
 
     return param_groups
