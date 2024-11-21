@@ -41,6 +41,8 @@ class BaselineTrainer:
             mixup_fn: Optional[Mixup] = None,
             eval_only: bool = False,
             use_ddp: bool = False,
+            class_balanced_sampling: bool = False,
+            num_samples_per_class: int = 100,
     ) -> None:
         self._init_ddp(use_ddp)
         self.num_classes = model.num_classes
@@ -52,7 +54,10 @@ class BaselineTrainer:
         self.test_dataset = test_dataset
         self.batch_size = batch_size
         self.eval_only = eval_only
-        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers)
+        # Number of samples per class for class balanced sampling
+        self.num_samples_per_class = num_samples_per_class
+        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers,
+                                                     class_balanced_sampling=class_balanced_sampling)
         self.test_loader = self._prepare_dataloader(test_dataset, num_workers=num_workers)
         if len(loss_fn) == 1:
             self.loss_fn_train = self.loss_fn_eval = loss_fn[0]
@@ -130,43 +135,92 @@ class BaselineTrainer:
         self.loss_dict_val = {'test_loss': AverageMeter()}
 
     def _init_accuracy_metrics(self) -> None:
-        self.acc_dict_train = {'train_acc': torchmetrics.classification.MulticlassAccuracy(
-            num_classes=self.num_classes, top_k=1,
-            average="micro").to(self.local_rank,
-                                non_blocking=True),
-                               'train_acc_top5': torchmetrics.classification.MulticlassAccuracy(
-                                   num_classes=self.num_classes, top_k=5,
-                                   average="micro").to(self.local_rank,
-                                                       non_blocking=True),
-                               'macro_avg_acc_top1_train': torchmetrics.classification.MulticlassAccuracy(
-                                   num_classes=self.num_classes, top_k=1,
-                                   average="macro").to(self.local_rank,
-                                                       non_blocking=True),
-                               'macro_avg_acc_top5_train': torchmetrics.classification.MulticlassAccuracy(
-                                   num_classes=self.num_classes, top_k=5,
-                                   average="macro").to(self.local_rank,
-                                                       non_blocking=True)}
+        self.per_class_acc_train = {
+            'per_class_acc_train': torchmetrics.classification.MulticlassAccuracy(num_classes=self.num_classes,
+                                                                                  average="none").to(
+                self.local_rank, non_blocking=True)}
+        self.per_class_acc_test = {
+            'per_class_acc_test': torchmetrics.classification.MulticlassAccuracy(num_classes=self.num_classes,
+                                                                                 average="none").to(self.local_rank,
+                                                                                                    non_blocking=True)}
+        if self.num_classes <= 5:
+            self.acc_dict_train = {'train_acc': torchmetrics.classification.MulticlassAccuracy(
+                num_classes=self.num_classes, top_k=1, average="micro").to(self.local_rank, non_blocking=True),
+                                   'macro_avg_acc_top1_train': torchmetrics.classification.MulticlassAccuracy(
+                                       num_classes=self.num_classes, top_k=1, average="macro").to(self.local_rank,
+                                                                                                  non_blocking=True)}
+            self.acc_dict_test = {
+                'test_acc': torchmetrics.classification.MulticlassAccuracy(num_classes=self.num_classes, top_k=1,
+                                                                           average="micro").to(self.local_rank,
+                                                                                               non_blocking=True),
+                'macro_avg_acc_top1_test': torchmetrics.classification.MulticlassAccuracy(num_classes=self.num_classes,
+                                                                                          top_k=1, average="macro").to(
+                    self.local_rank, non_blocking=True)}
+        else:
+            self.acc_dict_train = {'train_acc': torchmetrics.classification.MulticlassAccuracy(
+                num_classes=self.num_classes, top_k=1,
+                average="micro").to(self.local_rank,
+                                    non_blocking=True),
+                                   'train_acc_top5': torchmetrics.classification.MulticlassAccuracy(
+                                       num_classes=self.num_classes, top_k=5,
+                                       average="micro").to(self.local_rank,
+                                                           non_blocking=True),
+                                   'macro_avg_acc_top1_train': torchmetrics.classification.MulticlassAccuracy(
+                                       num_classes=self.num_classes, top_k=1,
+                                       average="macro").to(self.local_rank,
+                                                           non_blocking=True),
+                                   'macro_avg_acc_top5_train': torchmetrics.classification.MulticlassAccuracy(
+                                       num_classes=self.num_classes, top_k=5,
+                                       average="macro").to(self.local_rank,
+                                                           non_blocking=True)}
 
-        self.acc_dict_test = {'test_acc': torchmetrics.classification.MulticlassAccuracy(
-            num_classes=self.num_classes, top_k=1,
-            average="micro").to(self.local_rank,
-                                non_blocking=True),
-                              'test_acc_top5': torchmetrics.classification.MulticlassAccuracy(
-                                  num_classes=self.num_classes, top_k=5,
-                                  average="micro").to(self.local_rank,
-                                                      non_blocking=True),
-                              'macro_avg_acc_top1_test': torchmetrics.classification.MulticlassAccuracy(
-                                  num_classes=self.num_classes, top_k=1,
-                                  average="macro").to(self.local_rank,
-                                                      non_blocking=True),
-                              'macro_avg_acc_top5_test': torchmetrics.classification.MulticlassAccuracy(
-                                  num_classes=self.num_classes, top_k=5,
-                                  average="macro").to(self.local_rank,
-                                                      non_blocking=True)}
+            self.acc_dict_test = {'test_acc': torchmetrics.classification.MulticlassAccuracy(
+                num_classes=self.num_classes, top_k=1,
+                average="micro").to(self.local_rank,
+                                    non_blocking=True),
+                                  'test_acc_top5': torchmetrics.classification.MulticlassAccuracy(
+                                      num_classes=self.num_classes, top_k=5,
+                                      average="micro").to(self.local_rank,
+                                                          non_blocking=True),
+                                  'macro_avg_acc_top1_test': torchmetrics.classification.MulticlassAccuracy(
+                                      num_classes=self.num_classes, top_k=1,
+                                      average="macro").to(self.local_rank,
+                                                          non_blocking=True),
+                                  'macro_avg_acc_top5_test': torchmetrics.classification.MulticlassAccuracy(
+                                      num_classes=self.num_classes, top_k=5,
+                                      average="macro").to(self.local_rank,
+                                                          non_blocking=True)}
+        if self.num_classes == 2:
+            self.auroc_train = {
+                'auroc_train': torchmetrics.classification.BinaryAUROC(thresholds=None).to(self.local_rank,
+                                                                                           non_blocking=True)}
+            self.auroc_test = {
+                'auroc_test': torchmetrics.classification.BinaryAUROC(thresholds=None).to(self.local_rank,
+                                                                                          non_blocking=True)}
+        else:
+            self.auroc_train = {
+                'auroc_train': torchmetrics.classification.MulticlassAUROC(num_classes=self.num_classes,
+                                                                           average="macro").to(self.local_rank,
+                                                                                               non_blocking=True)}
+            self.auroc_test = {
+                'auroc_test': torchmetrics.classification.MulticlassAUROC(num_classes=self.num_classes,
+                                                                          average="macro").to(self.local_rank,
+                                                                                              non_blocking=True)}
 
-    def _prepare_dataloader_ddp(self, dataset: torch.utils.data.Dataset, num_workers: int = 4):
-
-        return torch.utils.data.DataLoader(
+    def _prepare_dataloader_ddp(self, dataset: torch.utils.data.Dataset, num_workers: int = 4,
+                                class_balanced_sampling: bool = False):
+        if class_balanced_sampling:
+            return torch.utils.data.DataLoader(
+                dataset,
+                batch_size=self.batch_size,
+                pin_memory=True,
+                shuffle=False,
+                num_workers=num_workers,
+                drop_last=True,
+                sampler=ClassBalancedDistributedSampler(dataset, num_samples_per_class=self.num_samples_per_class)
+            )
+        else:
+            return torch.utils.data.DataLoader(
                 dataset,
                 batch_size=self.batch_size,
                 pin_memory=True,
@@ -176,11 +230,22 @@ class BaselineTrainer:
                 sampler=DistributedSampler(dataset)
             )
 
-    def _prepare_dataloader(self, dataset: torch.utils.data.Dataset, num_workers: int = 4):
+    def _prepare_dataloader(self, dataset: torch.utils.data.Dataset, num_workers: int = 4,
+                            class_balanced_sampling: bool = False):
         if self.use_ddp:
-            return self._prepare_dataloader_ddp(dataset, num_workers)
+            return self._prepare_dataloader_ddp(dataset, num_workers, class_balanced_sampling)
 
-        return torch.utils.data.DataLoader(
+        if class_balanced_sampling:
+            return torch.utils.data.DataLoader(
+                dataset,
+                batch_size=self.batch_size,
+                pin_memory=True,
+                shuffle=False,
+                num_workers=num_workers,
+                drop_last=True,
+                sampler=ClassBalancedRandomSampler(dataset, num_samples_per_class=self.num_samples_per_class))
+        else:
+            return torch.utils.data.DataLoader(
                 dataset,
                 batch_size=self.batch_size,
                 pin_memory=True,
@@ -197,7 +262,7 @@ class BaselineTrainer:
             else:
                 snapshot = fsspec.open(self.snapshot_path)
             with snapshot as f:
-                snapshot_data = torch.load(f, map_location=loc)
+                snapshot_data = torch.load(f, map_location=loc, weights_only=True)
         except FileNotFoundError:
             print("Snapshot not found. Training model from scratch")
             return
@@ -258,13 +323,25 @@ class BaselineTrainer:
         for key in self.loss_dict_val:
             self.loss_dict_val[key].reset()
         accuracies_dict = {}
+        accuracies_dict_per_class = {}
         # Compute metrics for evaluation
         for key in self.acc_dict_train.keys():
             self.acc_dict_train[key].reset()
         for key in self.acc_dict_test.keys():
             self.acc_dict_test[key].reset()
+        for key in self.per_class_acc_train.keys():
+            self.per_class_acc_train[key].reset()
+        for key in self.per_class_acc_test.keys():
+            self.per_class_acc_test[key].reset()
 
-        for it, (source, targets) in enumerate(dataloader):
+        for key in self.auroc_train.keys():
+            self.auroc_train[key].reset()
+        for key in self.auroc_test.keys():
+            self.auroc_test[key].reset()
+
+        for it, mini_batch in enumerate(dataloader):
+            source = mini_batch[0]
+            targets = mini_batch[1]
             step_type = "Train" if train else "Eval"
             source = source.to(self.local_rank, non_blocking=True)
             targets = targets.to(self.local_rank, non_blocking=True)
@@ -279,10 +356,25 @@ class BaselineTrainer:
                 if self.mixup_fn is None:
                     for key in self.acc_dict_train.keys():
                         self.acc_dict_train[key].update(batch_preds, targets)
+                    for key in self.per_class_acc_train.keys():
+                        self.per_class_acc_train[key].update(batch_preds, targets)
+                    if self.num_classes == 2:
+                        with torch.no_grad():
+                            probs_positives = torch.softmax(batch_preds, dim=1)[:, 1].squeeze()  # (B,)
+                        self.auroc_train['auroc_train'].update(probs_positives, targets.long())
+                    else:
+                        self.auroc_train['auroc_train'].update(batch_preds, targets.long())
             else:
                 self.loss_dict_val['test_loss'].update(batch_loss, source.size(0))
                 for key in self.acc_dict_test.keys():
                     self.acc_dict_test[key].update(batch_preds, targets)
+                for key in self.per_class_acc_test.keys():
+                    self.per_class_acc_test[key].update(batch_preds, targets)
+                if self.num_classes == 2:
+                    probs_positives = torch.softmax(batch_preds, dim=1)[:, 1].squeeze()
+                    self.auroc_test['auroc_test'].update(probs_positives, targets.long())
+                else:
+                    self.auroc_test['auroc_test'].update(batch_preds, targets.long())
 
             if it % self.log_freq == 0:
                 print(f"[GPU{self.global_rank}] Epoch {epoch} | Iter {it} | {step_type} Loss {batch_loss:.5f}")
@@ -293,11 +385,23 @@ class BaselineTrainer:
             if self.mixup_fn is None:
                 for key in self.acc_dict_train.keys():
                     accuracies_dict[key] = self.acc_dict_train[key].compute().item() * 100
+                for key in self.per_class_acc_train.keys():
+                    accuracies_dict_per_class[key] = self.per_class_acc_train[key].compute() * 100
+                    for i in range(self.num_classes):
+                        accuracies_dict_per_class[key][i] = accuracies_dict_per_class[key][i].item()
+                for key in self.auroc_train.keys():
+                    accuracies_dict[key] = self.auroc_train[key].compute().item() * 100
         else:
             loss_value = self.loss_dict_val['test_loss'].avg
             for key in self.acc_dict_test.keys():
                 accuracies_dict[key] = self.acc_dict_test[key].compute().item() * 100
-        return loss_value, accuracies_dict
+            for key in self.per_class_acc_test.keys():
+                accuracies_dict_per_class[key] = self.per_class_acc_test[key].compute() * 100
+                for i in range(self.num_classes):
+                    accuracies_dict_per_class[key][i] = accuracies_dict_per_class[key][i].item()
+            for key in self.auroc_test.keys():
+                accuracies_dict[key] = self.auroc_test[key].compute().item() * 100
+        return loss_value, accuracies_dict, accuracies_dict_per_class
 
     def _save_snapshot(self, epoch, save_best: bool = False):
         # capture snapshot
@@ -334,7 +438,7 @@ class BaselineTrainer:
             epoch += 1
             self.current_epoch = epoch
             self.model.train()
-            train_loss, acc_dict_train = self._run_epoch(epoch, self.train_loader, train=True)
+            train_loss, acc_dict_train, _ = self._run_epoch(epoch, self.train_loader, train=True)
 
             logging_dict = {"epoch": epoch,
                             'base_lr': self.optimizer.param_groups[0]['lr'],
@@ -351,7 +455,7 @@ class BaselineTrainer:
             # eval run
             if self.test_loader:
                 self.model.eval()
-                test_loss, acc_dict_test = self._run_epoch(epoch, self.test_loader, train=False)
+                test_loss, acc_dict_test, _ = self._run_epoch(epoch, self.test_loader, train=False)
                 if self.local_rank == 0 and self.global_rank == 0:
                     test_acc = acc_dict_test['test_acc']
                     self.epoch_test_accuracies.append(test_acc)
@@ -373,12 +477,16 @@ class BaselineTrainer:
         logging_dict = {"epoch": 0}
         with torch.inference_mode():
             if self.test_loader:
-                test_loss, acc_dict_test = self._run_epoch(0, self.test_loader, train=False)
+                test_loss, acc_dict_test, per_class_acc_dict = self._run_epoch(0, self.test_loader, train=False)
             print(f'Test loss: {test_loss:.5f}'
                   f'| Test acc: {acc_dict_test["test_acc"]:.5f} '
-                  f'| Test acc top5: {acc_dict_test["test_acc_top5"]:.5f} '
-                  f'| Macro avg acc top1: {acc_dict_test["macro_avg_acc_top1_test"]:.5f} '
-                  f'| Macro avg acc top5: {acc_dict_test["macro_avg_acc_top5_test"]:.5f}')
+                  f'| Macro avg acc top1: {acc_dict_test["macro_avg_acc_top1_test"]:.5f}'
+                  f'| AUROC: {acc_dict_test["auroc_test"]:.5f}')
+            # Print per class accuracy if num_classes <= 5
+            if self.num_classes <= 5:
+                for key in per_class_acc_dict.keys():
+                    for i in range(self.num_classes):
+                        print(f'Class {i} | {key}: {per_class_acc_dict[key][i]:.5f}')
         if self.local_rank == 0 and self.global_rank == 0:
             logging_dict.update({"test_loss": test_loss})
             logging_dict.update(acc_dict_test)
@@ -406,6 +514,8 @@ def launch_baseline_trainer(model: torch.nn.Module,
                             seed: int = 42,
                             eval_only: bool = False,
                             use_ddp: bool = False,
+                            class_balanced_sampling: bool = False,
+                            num_samples_per_class: int = 100,
                             ) -> None:
     """Trains and tests a PyTorch model.
 
@@ -450,10 +560,12 @@ def launch_baseline_trainer(model: torch.nn.Module,
                               log_freq=log_freq,
                               use_amp=use_amp,
                               grad_norm_clip=grad_norm_clip, max_epochs=epochs, num_workers=num_workers,
-                              mixup_fn=mixup_fn, eval_only=eval_only, use_ddp=use_ddp)
+                              mixup_fn=mixup_fn, eval_only=eval_only, use_ddp=use_ddp,
+                              class_balanced_sampling=class_balanced_sampling,
+                              num_samples_per_class=num_samples_per_class)
     if eval_only:
         trainer.test_only()
     else:
         trainer.train()
-
-    destroy_process_group()
+    if use_ddp:
+        destroy_process_group()

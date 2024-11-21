@@ -6,7 +6,7 @@ from timm.models import create_model
 from torchvision.models import get_model
 from models import LinearProbeViT, IndividualLandmarkConvNext, IndividualLandmarkResNet, IndividualLandmarkViT, \
     AttnMaskViT, LateMaskViT, AttnMaskViTTeacher, LateMaskViTStudent, AttnMaskViTParallel, \
-    FullTwoStageModelDoubleClassify, FullTwoStageModelAttributes, FullTwoStageModelDoubleClassifyHF
+    FullTwoStageModelDoubleClassify, FullTwoStageModelDoubleClassifyHF, BaselineDInoV2HF
 from models.selfpatch_vision_transformer import vit_small_sp, load_pretrained_weights_sp
 
 
@@ -264,9 +264,19 @@ def load_model_baseline(args, num_cls):
     :param num_cls: Number of classes in the dataset
     :return:
     """
-    base_model = load_model_arch(args, num_cls)
-    model = init_model_baseline(base_model, args, num_cls)
+    if args.use_hf_transformers:
+        model = load_model_baseline_hf(args, num_cls)
+    else:
+        base_model = load_model_arch(args, num_cls)
+        model = init_model_baseline(base_model, args, num_cls)
+    return model
 
+
+def load_model_baseline_hf(args, num_cls):
+    from transformers import AutoModel
+    init_model = AutoModel.from_pretrained(args.model_arch)
+    model = BaselineDInoV2HF(init_model.config, num_classes=num_cls)
+    model.load_state_dict(init_model.state_dict(), strict=False)
     return model
 
 

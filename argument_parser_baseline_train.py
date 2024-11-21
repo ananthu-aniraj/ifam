@@ -16,12 +16,13 @@ def parse_args():
                         help='subdirectory that contains test images')
     parser.add_argument('--dataset', default='cub', type=str)
     parser.add_argument('--train_split', default=0.9, type=float, help='fraction of training data to use')
-    parser.add_argument('--eval_mode', default='val', choices=['train', 'val', 'test'], type=str,
+    parser.add_argument('--eval_mode', default='val', type=str,
                         help='which split to use for evaluation')
     parser.add_argument('--anno_path_train', default='', type=str, required=False)
     parser.add_argument('--anno_path_test', default='', type=str, required=False)
     parser.add_argument('--metadata_path', default='', type=str, required=False)
     parser.add_argument('--species_id_to_name_file', default='', type=str, required=False)
+    parser.add_argument('--mask_sub_path', default='all_masks', type=str, required=False)
 
     # Training
     parser.add_argument('--snapshot_dir', type=str)
@@ -58,7 +59,8 @@ def parse_args():
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
     # Augmentation parameters
-    parser.add_argument('--augmentations_to_use', type=str, default='')
+    parser.add_argument('--augmentations_to_use', type=str, default='timm',
+                        choices=['timm', 'torchvision', 'cub_original'])
     parser.add_argument('--image_size', default=448, type=int)
     parser.add_argument('--color_jitter', type=float, default=0.1, metavar='PCT',
                         help='Color jitter factor (default: 0.1)')
@@ -85,6 +87,7 @@ def parse_args():
     # Model params
     parser.add_argument('--model_arch', default='resnet50', type=str,
                         help='pick model architecture')
+    parser.add_argument('--use_hf_transformers', default=False, action='store_true')
     parser.add_argument('--use_torchvision_resnet_model', default=False, action='store_true')
     parser.add_argument('--pretrained_start_weights', default=False, action='store_true')
     parser.add_argument('--pretrained_model_path', default=None, type=str)
@@ -92,8 +95,8 @@ def parse_args():
                         help='Drop path rate (default: 0.0)')
     parser.add_argument('--output_stride', type=int, default=32, help='stride of the model')
     parser.add_argument('--freeze_backbone', default=False, action='store_true')
-    parser.add_argument('--pooling_type', default='cls_token', type=str, choices=['cls_token', 'sim_pool', 'max_pool', 'avg_pool', 'specific_patch_probe', 'attention_pool_latent'])
-    parser.add_argument('--reinit_fc_norm', default=False, action='store_true')
+    parser.add_argument('--class_token_only', default=False, action='store_true')
+    parser.add_argument('--patch_tokens_only', default=False, action='store_true')
 
     # * Optimizer params
     parser.add_argument('--optimizer_type', default='adam', type=str)
@@ -112,11 +115,11 @@ def parse_args():
                         choices=['cosine', 'linearlr', 'steplr'],
                         type=str)
     parser.add_argument('--scheduler_warmup_epochs', default=0, type=int)
-    parser.add_argument('--warmup_lr', type=float, default=1e-6)
+    parser.add_argument('--warmup_lr', type=float, default=0.0)
     parser.add_argument('--scheduler_restart_factor', default=1, type=int)
     parser.add_argument('--scheduler_gamma', default=0.1, type=float)
     parser.add_argument('--scheduler_step_size', default=10, type=int)
-    parser.add_argument('--min_lr', type=float, default=0., metavar='LR',
+    parser.add_argument('--min_lr', type=float, default=0.0, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0 (1e-6)')
     parser.add_argument('--cosine_cycle_limit', default=1, type=int)
 
@@ -126,7 +129,7 @@ def parse_args():
     parser.add_argument('--job_type', default='fine_tune_dino_v2', type=str)
     parser.add_argument('--log_interval', default=10, type=int)
     parser.add_argument('--group', default='vit_base', type=str)
-    parser.add_argument('--wandb_entity', default='', type=str)
+    parser.add_argument('--wandb_entity', default='ananthu-phd', type=str)
     parser.add_argument('--wandb_mode', default='online', type=str, choices=['online', 'offline'])
 
     # * Resume training params
@@ -149,33 +152,5 @@ def parse_args():
     parser.add_argument('--array_training_job', default=False, action='store_true',
                         help='Whether to run as an array job (i.e. training with multiple random seeds on the same settings)')
 
-    # Attribute prediction
-    parser.add_argument('--predict_attributes', default=False, action='store_true')
-    parser.add_argument('--predict_non_part_attributes', default=False, action='store_true')
-    parser.add_argument('--attribute_prediction_loss_type', default="bce", choices=["mil", "mae", "bce", "mse", "focal", "asymmetric_multi_label"],
-                        type=str)
-    parser.add_argument('--part_to_probe', default="", type=str)
-    parser.add_argument('--probe_specific_patch', default=False, action='store_true')
-    parser.add_argument('--use_albumentations', default=False, action='store_true')
-
-    # Pdiscoformer params
-    parser.add_argument('--pdiscoformer_model_arch', default='vit_base_patch14_reg4_dinov2.lvd142m', type=str)
-    parser.add_argument('--num_parts', default=16, type=int)
-    parser.add_argument('--modulation_type', default="layer_norm",
-                        choices=["original", "layer_norm", "parallel_mlp", "parallel_mlp_no_bias",
-                                 "parallel_mlp_no_act", "parallel_mlp_no_act_no_bias", "none"],
-                        type=str)
-    parser.add_argument('--modulation_orth', default=False, action='store_true',
-                        help='use orthogonality loss on modulated features')
-    parser.add_argument('--pdiscoformer_classifier_type', default="linear",
-                        choices=["linear", "independent_mlp"], type=str)
-    parser.add_argument('--gumbel_softmax', default=False, action='store_true')
-    parser.add_argument('--gumbel_softmax_temperature', default=1.0, type=float)
-    parser.add_argument('--gumbel_softmax_hard', default=False, action='store_true')
-    parser.add_argument('--pdiscoformer_pretrained_path', type=str, default=None)
-    parser.add_argument('--pdisco_part_idx', default=0, type=int)
-    parser.add_argument('--pdisco_image_size', default=448, type=int)
-    parser.add_argument('--late_masking', default=False, action='store_true')
-    parser.add_argument('--parallel_masking', default=False, action='store_true')
     args = parser.parse_args()
     return args
