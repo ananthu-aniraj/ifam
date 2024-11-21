@@ -1,5 +1,5 @@
 """
-From: https://github.com/zxhuang1698/interpretability-by-parts/blob/master/src/cub200/eval_interp.py
+From: https://github.com/ananthu-aniraj/pdiscoformer/blob/main/evaluate_parts.py
 """
 # pytorch & misc
 import torch

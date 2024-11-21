@@ -18,3 +18,4 @@ from .attn_mask_vit_2_stage_independent_mlp_parallel import *
 from .two_stage_attributes import *
 from .hf_transformers_dinov2 import *
 from .two_stage_double_classification_hf import *
+from .vit_baseline import *

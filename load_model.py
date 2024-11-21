@@ -4,8 +4,7 @@ import torch
 import timm
 from timm.models import create_model
 from torchvision.models import get_model
-from models import LinearProbeViT, IndividualLandmarkConvNext, IndividualLandmarkResNet, IndividualLandmarkViT, \
-    AttnMaskViT, LateMaskViT, AttnMaskViTTeacher, LateMaskViTStudent, AttnMaskViTParallel, \
+from models import BaselineViT, \
     FullTwoStageModelDoubleClassify, FullTwoStageModelDoubleClassifyHF, BaselineDInoV2HF
 from models.selfpatch_vision_transformer import vit_small_sp, load_pretrained_weights_sp
 
@@ -156,80 +155,6 @@ def load_model_arch_ibot(model_arch):
     return model
 
 
-def load_pdiscoformer_model_arch(args, num_cls):
-    """
-    Function to load the model
-    :param args: Arguments from the command line
-    :param num_cls: Number of classes in the dataset
-    :return:
-    """
-    if 'resnet' in args.pdiscoformer_model_arch:
-        num_layers_split = [int(s) for s in args.model_arch if s.isdigit()]
-        num_layers = int(''.join(map(str, num_layers_split)))
-        if num_layers >= 100:
-            timm_model_arch = args.pdiscoformer_model_arch + ".a1h_in1k"
-        else:
-            timm_model_arch = args.pdiscoformer_model_arch + ".a1_in1k"
-
-    if "resnet" in args.pdiscoformer_model_arch and args.use_torchvision_resnet_model:
-        weights = "DEFAULT" if args.pretrained_start_weights else None
-        base_model = get_model(args.pdiscoformer_model_arch, weights=weights)
-    elif "resnet" in args.pdiscoformer_model_arch and not args.use_torchvision_resnet_model:
-        if args.eval_only:
-            base_model = create_model(
-                timm_model_arch,
-                pretrained=args.pretrained_start_weights,
-                num_classes=num_cls,
-                output_stride=args.output_stride,
-            )
-        else:
-            base_model = create_model(
-                timm_model_arch,
-                pretrained=args.pretrained_start_weights,
-                drop_path_rate=args.drop_path,
-                num_classes=num_cls,
-                output_stride=args.output_stride,
-            )
-
-    elif "convnext" in args.pdiscoformer_model_arch:
-        if args.eval_only:
-            base_model = create_model(
-                args.pdiscoformer_model_arch,
-                pretrained=args.pretrained_start_weights,
-                num_classes=num_cls,
-                output_stride=args.output_stride,
-            )
-        else:
-            base_model = create_model(
-                args.pdiscoformer_model_arch,
-                pretrained=args.pretrained_start_weights,
-                drop_path_rate=args.drop_path,
-                num_classes=num_cls,
-                output_stride=args.output_stride,
-            )
-    elif "vit" in args.pdiscoformer_model_arch:
-        if args.eval_only:
-            base_model = create_model(
-                args.pdiscoformer_model_arch,
-                pretrained=args.pretrained_start_weights,
-                img_size=args.pdisco_image_size,
-            )
-        else:
-            base_model = create_model(
-                args.pdiscoformer_model_arch,
-                pretrained=args.pretrained_start_weights,
-                drop_path_rate=args.drop_path,
-                img_size=args.pdisco_image_size,
-            )
-        vit_patch_size = base_model.patch_embed.proj.kernel_size[0]
-        if args.pdisco_image_size % vit_patch_size != 0:
-            raise ValueError(f"Image size {args.pdisco_image_size} must be divisible by patch size {vit_patch_size}")
-    else:
-        raise ValueError('Model not supported.')
-
-    return base_model
-
-
 def init_model_baseline(base_model, args, num_cls):
     """
     Function to initialize the baseline model
@@ -249,11 +174,9 @@ def init_model_baseline(base_model, args, num_cls):
         if base_model.fc.bias is not None:
             torch.nn.init.constant_(base_model.fc.bias, 0.)
 
-    elif 'vit' in args.model_arch or 'clippy' in args.model_arch or 'selfpatch' or 'ibot' in args.model_arch:
-        base_model = LinearProbeViT(base_model, num_classes=num_cls, pooling_type=args.pooling_type,
-                                    reinit_fc_norm=args.reinit_fc_norm)
-    else:
-        raise ValueError('Model not supported.')
+    if 'vit' in args.model_arch:
+        base_model = BaselineViT(base_model, num_classes=num_cls, class_tokens_only=args.class_token_only,
+                                 patch_tokens_only=args.patch_tokens_only)
     return base_model
 
 
@@ -280,26 +203,6 @@ def load_model_baseline_hf(args, num_cls):
     return model
 
 
-def load_starting_weights(args, model):
-    """
-    Function to load the starting weights
-    :param args: Arguments from the command line
-    :param model: Model object
-    :return:
-    """
-    snapshot_data = torch.load(args.pdiscoformer_pretrained_path, map_location=torch.device('cpu'), weights_only=True)
-    state_dict = snapshot_data['model_state']
-    if args.classifier_type == 'none':
-        state_dict.pop('fc_class_landmarks.weight', None)
-        state_dict.pop('fc_class_landmarks.bias', None)
-        keys_to_change = [key for key in state_dict.keys() if "modulation" in key]
-        for key in keys_to_change:
-            new_key = key.replace("modulation", "attribute_modulation")
-            state_dict[new_key] = state_dict.pop(key)
-    model.load_state_dict(state_dict, strict=False)
-    return model
-
-
 def convert_pretrained_checkpoint(ckpt_path):
     """
     Function to convert the checkpoint
@@ -317,116 +220,6 @@ def convert_pretrained_checkpoint(ckpt_path):
     state_dict.pop('head.bias', None)
 
     return state_dict
-
-
-def init_model_mask_vit(base_model, args, num_cls):
-    if args.late_masking:
-        base_model = LateMaskViT(base_model, num_classes=num_cls, pooling_type=args.pooling_type,
-                                 reinit_fc_norm=args.reinit_fc_norm)
-    else:
-        base_model = AttnMaskViT(base_model, num_classes=num_cls, pooling_type=args.pooling_type,
-                                 reinit_fc_norm=args.reinit_fc_norm)
-    return base_model
-
-
-def init_model_mask_vit_parallel(base_model, args, dataset):
-    num_att_per_part = dataset.num_attributes_per_part_idx
-    base_model = AttnMaskViTParallel(base_model, num_att_per_part=num_att_per_part, num_copies_cls=args.num_parts + 1)
-    return base_model
-
-
-def load_model_mask_vit(args, num_cls, dataset=None):
-    base_model = load_model_arch(args, num_cls=0)
-    if args.parallel_masking:
-        model = init_model_mask_vit_parallel(base_model, args, dataset)
-    else:
-        model = init_model_mask_vit(base_model, args, num_cls)
-    return model
-
-
-def init_model_distillation(base_model, args):
-    student_model = LateMaskViTStudent(base_model, pooling_type=args.pooling_type)
-    teacher_model = AttnMaskViTTeacher(base_model)
-
-    return student_model, teacher_model
-
-
-def load_model_distillation(args, num_cls):
-    base_model = load_model_arch(args, num_cls)
-    student_model, teacher_model = init_model_distillation(base_model, args)
-    return student_model, teacher_model
-
-
-def init_pdisco_model(base_model, args, num_cls):
-    """
-    Function to initialize the model
-    :param base_model: Base model
-    :param args: Arguments from the command line
-    :param num_cls: Number of classes in the dataset
-    :return:
-    """
-    # Initialize the network
-    if 'convnext' in args.pdiscoformer_model_arch:
-        sl_channels = base_model.stages[-1].downsample[-1].in_channels
-        fl_channels = base_model.head.in_features
-        model = IndividualLandmarkConvNext(base_model, args.num_parts, num_classes=num_cls,
-                                           sl_channels=sl_channels, fl_channels=fl_channels,
-                                           modulation_type=args.modulation_type,
-                                           gumbel_softmax=args.gumbel_softmax,
-                                           gumbel_softmax_temperature=args.gumbel_softmax_temperature,
-                                           gumbel_softmax_hard=args.gumbel_softmax_hard,
-                                           modulation_orth=args.modulation_orth,
-                                           classifier_type=args.pdiscoformer_classifier_type)
-    elif 'resnet' in args.pdiscoformer_model_arch:
-        sl_channels = base_model.layer4[0].conv1.in_channels
-        fl_channels = base_model.fc.in_features
-        model = IndividualLandmarkResNet(base_model, args.num_parts, num_classes=num_cls,
-                                         sl_channels=sl_channels, fl_channels=fl_channels,
-                                         use_torchvision_model=args.use_torchvision_resnet_model,
-                                         part_dropout=args.part_dropout, modulation_type=args.modulation_type,
-                                         gumbel_softmax=args.gumbel_softmax,
-                                         gumbel_softmax_temperature=args.gumbel_softmax_temperature,
-                                         gumbel_softmax_hard=args.gumbel_softmax_hard,
-                                         modulation_orth=args.modulation_orth,
-                                         classifier_type=args.pdiscoformer_classifier_type)
-    elif 'vit' in args.pdiscoformer_model_arch:
-        model = IndividualLandmarkViT(base_model, num_landmarks=args.num_parts, num_classes=num_cls,
-                                      modulation_type=args.modulation_type, gumbel_softmax=args.gumbel_softmax,
-                                      gumbel_softmax_temperature=args.gumbel_softmax_temperature,
-                                      gumbel_softmax_hard=args.gumbel_softmax_hard,
-                                      modulation_orth=args.modulation_orth,
-                                      classifier_type=args.pdiscoformer_classifier_type)
-    else:
-        raise ValueError('Model not supported.')
-
-    return model
-
-
-def load_starting_weights_pdiscoformer(args, model):
-    """
-    Function to load the starting weights
-    :param args: Arguments from the command line
-    :param model: Model object
-    :return:
-    """
-    snapshot_data = torch.load(args.pdiscoformer_pretrained_path, map_location=torch.device('cpu'), weights_only=True)
-    state_dict = snapshot_data['model_state']
-    model.load_state_dict(state_dict, strict=False)
-    return model
-
-
-def load_model_pdisco(args, num_cls):
-    """
-    Function to load the model
-    :param args: Arguments from the command line
-    :param num_cls: Number of classes in the dataset
-    :return:
-    """
-    base_model = load_pdiscoformer_model_arch(args, num_cls)
-    model = init_pdisco_model(base_model, args, num_cls)
-    model = load_starting_weights_pdiscoformer(args, model)
-
-    return model
 
 
 def load_model_arch_2_stage(args, stage_num):
@@ -485,7 +278,11 @@ def load_model_2_stage(args, dataset_test, num_cls):
 def load_model_2_stage_hf(args, num_cls, part_logits_threshold):
     from transformers import AutoModel
     init_model = AutoModel.from_pretrained(args.model_arch)
-    model = FullTwoStageModelDoubleClassifyHF(init_model, init_model.config, num_classes=num_cls, num_landmarks=args.num_parts,
-                                              softmax_temperature=args.softmax_temperature, part_dropout=args.part_dropout, part_dropout_stage_2=args.part_dropout_stage_2,
-                                              use_soft_masks=args.use_soft_masks, part_logits_threshold=part_logits_threshold)
+    model = FullTwoStageModelDoubleClassifyHF(init_model, init_model.config, num_classes=num_cls,
+                                              num_landmarks=args.num_parts,
+                                              softmax_temperature=args.softmax_temperature,
+                                              part_dropout=args.part_dropout,
+                                              part_dropout_stage_2=args.part_dropout_stage_2,
+                                              use_soft_masks=args.use_soft_masks,
+                                              part_logits_threshold=part_logits_threshold)
     return model
