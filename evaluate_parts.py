@@ -74,9 +74,6 @@ def parse_args():
 def main(args):
     mode = args.eval_mode
     nparts = args.num_parts
-    args.attribute_prediction = False
-    args.use_hf_transformers = False
-    args.part_logits_threshold_path = None
     args.part_dropout_stage_2 = 0.0
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     resize_transform = transforms.Resize(size=args.image_size)

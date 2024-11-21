@@ -71,7 +71,6 @@ def parse_args():
 def benchmark(args):
     args.eval_only = True
     args.pretrained_start_weights = True
-    args.attribute_prediction = False
     height = args.image_size
     test_transforms = transforms.Compose([
         transforms.Resize(size=height),
