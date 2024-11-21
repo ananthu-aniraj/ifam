@@ -2,7 +2,6 @@ import torch
 from timm.data.mixup import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 import torch.nn.functional as F
-from losses import AttributePredictionLoss, AsymmetricLossMultiLabel, DINOLoss
 
 
 class LabelSmoothingCrossEntropyNoReduction(LabelSmoothingCrossEntropy):
@@ -61,34 +60,6 @@ def load_classification_loss(args, dataset_train, num_cls, reduction='mean'):
     return loss_fn, mixup_fn
 
 
-def load_mse_loss(args, reduction='mean'):
-    loss_fn_train = torch.nn.MSELoss(reduction=reduction)
-    loss_fn_eval = torch.nn.MSELoss(reduction=reduction)
-    loss_fn = [loss_fn_train, loss_fn_eval]
-    mixup_fn = None
-    return loss_fn, mixup_fn
-
-
-def load_dino_loss(output_dim):
-    loss_fn_train = DINOLoss(output_dim)
-    loss_fn_eval = DINOLoss(output_dim)
-    loss_fn = [loss_fn_train, loss_fn_eval]
-    mixup_fn = None
-    return loss_fn, mixup_fn
-
-
-def load_attribute_loss(args, reduction='mean'):
-    loss_type = args.attribute_prediction_loss_type
-    if loss_type == "asymmetric_multi_label":
-        loss_fn_train = AsymmetricLossMultiLabel(reduction=reduction)
-    else:
-        loss_fn_train = AttributePredictionLoss(loss_type=loss_type, reduction=reduction)
-    loss_fn_eval = AttributePredictionLoss(loss_type="bce", reduction=reduction)
-    loss_fn = [loss_fn_train, loss_fn_eval]
-    mixup_fn = None
-    return loss_fn, mixup_fn
-
-
 def load_loss_hyper_params(args):
     """
     Load the hyperparameters for the loss functions and affine transform parameters for equivariance
@@ -104,8 +75,7 @@ def load_loss_hyper_params(args):
                         'l_enforced_presence': args.enforced_presence_loss,
                         'l_pixel_wise_entropy': args.pixel_wise_entropy_loss,
                         'l_enforced_presence_loss_type': args.enforced_presence_loss_type,
-                        'l_orth': args.orthogonality_loss_landmarks,
-                        'l_koleo': args.koleo_loss}
+                        'l_orth': args.orthogonality_loss_landmarks}
 
     # Affine transform parameters for equivariance
     degrees = [-args.degrees, args.degrees]

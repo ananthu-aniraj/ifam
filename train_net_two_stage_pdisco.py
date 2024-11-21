@@ -9,10 +9,9 @@ from utils.misc_utils import sync_bn_conversion, check_snapshot
 from utils.training_utils.ddp_utils import multi_gpu_check
 from utils.wandb_params import get_train_loggers
 from engine.distributed_trainer_two_stage_pdisco import launch_pdisco_2_stage_trainer
-from engine.distributed_trainer_two_stage_pdisco_attributes import launch_pdisco_2_stage_attributes_trainer
 from load_dataset import get_dataset
 from load_model import load_model_2_stage
-from load_losses import load_classification_loss, load_loss_hyper_params, load_attribute_loss
+from load_losses import load_classification_loss, load_loss_hyper_params
 
 torch.backends.cudnn.benchmark = True
 
@@ -40,12 +39,8 @@ def pdisco_train_eval():
     if use_ddp:
         model = sync_bn_conversion(model)
 
-    if args.attribute_prediction:
-        # Load the loss function
-        loss_fn, mixup_fn = load_attribute_loss(args)
-    else:
-        # Load the loss function
-        loss_fn, mixup_fn = load_classification_loss(args, dataset_train, num_cls)
+    # Load the loss function
+    loss_fn, mixup_fn = load_classification_loss(args, dataset_train, num_cls)
 
     # Load the loss hyperparameters
     loss_hyperparams, eq_affine_transform_params = load_loss_hyper_params(args)

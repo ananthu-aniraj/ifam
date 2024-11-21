@@ -1,3 +1,4 @@
+# Ref: https://github.com/ananthu-aniraj/pdiscoformer/blob/main/engine/losses/concentration_loss.py
 import torch
 from utils.get_landmark_coordinates import landmark_coordinates
 
@@ -5,7 +6,7 @@ from utils.get_landmark_coordinates import landmark_coordinates
 class ConcentrationLoss(torch.nn.Module):
     """
     This class defines the concentration loss.
-    Modified from: https://github.com/robertdvdk/part_detection/blob/eec53f2f40602113f74c6c1f60a2034823b0fcaf/train.py#L15
+    Modified from: https://github.com/ananthu-aniraj/pdiscoformer/blob/main/engine/losses/concentration_loss.py
     """
 
     def __init__(self):

@@ -176,8 +176,6 @@ class PDiscoTrainerTwoStage:
         self.presence_loss = PresenceLoss(beta=self.l_presence_beta,
                                           loss_type=self.l_presence_type).to(self.local_rank, non_blocking=True)
         self.l_orth = loss_hyperparams['l_orth']
-        self.l_koleo = loss_hyperparams['l_koleo']
-        self.koleo_loss = KoLeoLoss().to(self.local_rank, non_blocking=True)
         self.loss_fn_eval = self.loss_fn_eval.to(self.local_rank, non_blocking=True)
         self.loss_fn_train = self.loss_fn_train.to(self.local_rank, non_blocking=True)
         self.loss_fn_stage_1_train = self.loss_fn_stage_1_train.to(self.local_rank, non_blocking=True)
@@ -200,7 +198,6 @@ class PDiscoTrainerTwoStage:
                                 'loss_tv': AverageMeter(),
                                 'loss_enforced_presence': AverageMeter(),
                                 'loss_pixel_wise_entropy': AverageMeter(),
-                                'loss_koleo': AverageMeter(),
                                 'loss_classification_stage_1': AverageMeter()}
 
         self.loss_dict_val = {'loss_total_val': AverageMeter()}
@@ -441,8 +438,6 @@ class PDiscoTrainerTwoStage:
                 loss_equiv = equivariance_loss(maps, equiv_maps, source, self.num_landmarks, translate, angle,
                                                scale,
                                                shear=0.0) * self.l_equiv
-                # KoLeo loss
-                loss_koleo = self.koleo_loss(all_features[:, :, :-1]) * self.l_koleo
 
                 # Enforced presence loss
                 loss_enforced_presence = self.enforced_presence_loss(maps) * self.l_enforced_presence
@@ -451,7 +446,7 @@ class PDiscoTrainerTwoStage:
                 loss_pixel_wise_entropy = pixel_wise_entropy_loss(maps) * self.l_pixel_wise_entropy
 
                 loss = loss_conc + loss_presence + loss_classification + loss_equiv + loss_tv + loss_enforced_presence
-                loss += loss_orth + loss_koleo
+                loss += loss_orth
                 loss += loss_pixel_wise_entropy
                 loss += loss_classification_stage_1
                 self.optimizer.zero_grad(set_to_none=True)
@@ -475,7 +470,6 @@ class PDiscoTrainerTwoStage:
                                'loss_total_train': loss.item(), 'loss_tv': loss_tv.item(),
                                'loss_enforced_presence': loss_enforced_presence.item(),
                                'loss_pixel_wise_entropy': loss_pixel_wise_entropy.item(),
-                               'loss_koleo': loss_koleo.item(),
                                'loss_classification_stage_1': loss_classification_stage_1.item()}
             else:
                 loss = self.loss_fn_eval(outputs, targets)
@@ -612,7 +606,6 @@ class PDiscoTrainerTwoStage:
                         f'| Enforced Presence Loss {losses_dict["loss_enforced_presence"]:.5f}'
                         f'| Pixel-wise Entropy Loss {losses_dict["loss_pixel_wise_entropy"]:.5f}'
                         f'| Orthogonality Loss {losses_dict["loss_orth_train"]:.5f}'
-                        f'| KoLeo Loss {losses_dict["loss_koleo"]:.5f}'
                         f'| Classification Loss Stage 1 {losses_dict["loss_classification_stage_1"]:.5f}')
                 else:
                     print(

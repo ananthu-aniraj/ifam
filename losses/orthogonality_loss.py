@@ -1,10 +1,10 @@
+# Ref: https://github.com/ananthu-aniraj/pdiscoformer/blob/main/engine/losses/orthogonality_loss.py
 import torch
 
 
 def orthogonality_loss(all_features):
     """
     Calculate orthogonality loss for a feature map
-    Ref: https://github.com/robertdvdk/part_detection/blob/eec53f2f40602113f74c6c1f60a2034823b0fcaf/train.py#L44
     :param all_features: The feature map with shape (batch_size, feature_dim, num_landmarks + 1)
     :return:
     """
