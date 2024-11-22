@@ -144,10 +144,6 @@ def parse_args():
     parser.add_argument('--topk_scale', default=60, type=int)
     parser.add_argument('--topk_n_sample', default=5, type=int)
 
-    # Class balanced training sampling
-    parser.add_argument('--use_class_balanced_sampling', default=False, action='store_true')
-    parser.add_argument('--num_samples_per_class', default=100, type=int)
-
     # Array training job
     parser.add_argument('--array_training_job', default=False, action='store_true',
                         help='Whether to run as an array job (i.e. training with multiple random seeds on the same settings)')

@@ -68,7 +68,6 @@ def baseline_train_eval():
                             seed=args.seed,
                             eval_only=args.eval_only,
                             use_ddp=use_ddp,
-                            class_balanced_sampling=args.use_class_balanced_sampling,
                             num_samples_per_class=args.num_samples_per_class,
                             )
 

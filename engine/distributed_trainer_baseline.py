@@ -39,7 +39,6 @@ class BaselineTrainer:
             mixup_fn: Optional[Mixup] = None,
             eval_only: bool = False,
             use_ddp: bool = False,
-            class_balanced_sampling: bool = False,
             num_samples_per_class: int = 100,
     ) -> None:
         self._init_ddp(use_ddp)
@@ -489,7 +488,6 @@ def launch_baseline_trainer(model: torch.nn.Module,
                             seed: int = 42,
                             eval_only: bool = False,
                             use_ddp: bool = False,
-                            class_balanced_sampling: bool = False,
                             num_samples_per_class: int = 100,
                             ) -> None:
     """Trains and tests a PyTorch model.
@@ -519,7 +517,6 @@ def launch_baseline_trainer(model: torch.nn.Module,
     seed: An integer indicating the random seed to use.
     eval_only: A boolean indicating whether to only run evaluation.
     use_ddp: A boolean indicating whether to use DDP.
-        class_balanced_sampling: A boolean indicating whether to use class-balanced sampling
     num_samples_per_class: An integer indicating the number of samples per class for class-balanced sampling
     @rtype: None
     """
@@ -536,7 +533,6 @@ def launch_baseline_trainer(model: torch.nn.Module,
                               use_amp=use_amp,
                               grad_norm_clip=grad_norm_clip, max_epochs=epochs, num_workers=num_workers,
                               mixup_fn=mixup_fn, eval_only=eval_only, use_ddp=use_ddp,
-                              class_balanced_sampling=class_balanced_sampling,
                               num_samples_per_class=num_samples_per_class)
     if eval_only:
         trainer.test_only()
