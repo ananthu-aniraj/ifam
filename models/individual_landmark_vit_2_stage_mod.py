@@ -174,10 +174,10 @@ class IndividualLandmarkViT2StageMod(torch.nn.Module):
         else:
             maps = torch.nn.functional.softmax(part_logits / softmax_temp, dim=1)  # [B, num_landmarks + 1, H, W]
 
-        _, _, maps_fg_bg_hard, maps_fg_bg_soft = gumbel_softmax_straight_through_custom(part_logits,
-                                                                                        tau=softmax_temp,
-                                                                                        part_dropout=self.part_dropout_stage_2,
-                                                                                        training_mode=self.training)
+        maps_fg_bg_hard, maps_fg_bg_soft = gumbel_softmax_straight_through_custom(part_logits,
+                                                                                  tau=softmax_temp,
+                                                                                  part_dropout=self.part_dropout_stage_2,
+                                                                                  training_mode=self.training)
 
         maps_fg_bg = (maps_fg_bg_hard, maps_fg_bg_soft)
 

@@ -98,10 +98,10 @@ class DinoV2PDiscoHF(Dinov2PreTrainedModel):
         maps = torch.nn.functional.gumbel_softmax(part_logits, dim=1, tau=self.softmax_temperature,
                                                   hard=False)  # [B, num_landmarks + 1, H, W]
 
-        _, _, maps_fg_bg_hard, maps_fg_bg_soft = gumbel_softmax_straight_through_custom(part_logits,
-                                                                                        tau=self.softmax_temperature,
-                                                                                        part_dropout=self.part_dropout_stage_2,
-                                                                                        training_mode=self.training)
+        maps_fg_bg_hard, maps_fg_bg_soft = gumbel_softmax_straight_through_custom(part_logits,
+                                                                                  tau=self.softmax_temperature,
+                                                                                  part_dropout=self.part_dropout_stage_2,
+                                                                                  training_mode=self.training)
         maps_fg_bg = (maps_fg_bg_hard, maps_fg_bg_soft)
         # Use maps to get weighted average features per landmark
         all_features = (maps.unsqueeze(1) * x.unsqueeze(2)).contiguous()  # [B, embed_dim, num_landmarks + 1, H, W]

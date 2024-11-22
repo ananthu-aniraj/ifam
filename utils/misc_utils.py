@@ -33,21 +33,15 @@ def gumbel_softmax_straight_through_custom(logits: Tensor, tau: float = 1, dim: 
         y_soft_fg = torch.nn.functional.dropout2d(y_soft_fg, p=part_dropout, training=training_mode)
         # Rescale the fg part
         y_soft_fg = y_soft_fg * (1.0 - part_dropout)
-    y_soft = torch.cat([y_soft_fg, y_soft_bg.unsqueeze(1)], dim=1)
     y_soft_fg_full = y_soft_fg.amax(dim=1, keepdim=True)  # [B, 1, H, W]
-    y_soft_fg_bg = torch.cat([y_soft_fg_full, y_soft_bg.unsqueeze(1)], dim=1)  # [B, 2, H, W]
-
-    # Straight through.
-    index = y_soft.max(dim, keepdim=True)[1]
-    y_hard = torch.zeros_like(logits, memory_format=torch.legacy_contiguous_format).scatter_(dim, index, 1.0)
-    ret = y_hard - y_soft.detach() + y_soft
+    y_soft_fg_bg = torch.cat([y_soft_fg_full, y_soft_bg.unsqueeze(1)], dim=1).contiguous()  # [B, 2, H, W]
 
     # Straight through for fg_bg
     index = y_soft_fg_bg.max(dim, keepdim=True)[1]
     y_hard_fg_bg = torch.zeros_like(y_soft_fg_bg, memory_format=torch.legacy_contiguous_format).scatter_(dim, index,
                                                                                                          1.0)
     ret_fg_bg = y_hard_fg_bg - y_soft_fg.sum(dim=1, keepdim=True).detach() + y_soft_fg.sum(dim=1, keepdim=True)
-    return ret, y_soft, ret_fg_bg, y_soft_fg_bg
+    return ret_fg_bg, y_soft_fg_bg
 
 
 def compute_attention(qkv, scale=None):
