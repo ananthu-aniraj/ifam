@@ -109,81 +109,6 @@ def inverse_normalize_w_resize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_
     return resize_unnorm
 
 
-def crop_augmentation(image_size):
-    crop_aug = A.RandomSizedBBoxSafeCrop(image_size, image_size, erosion_rate=0.0, interpolation=1, p=1.0)
-    return crop_aug
-
-
-def make_train_transforms_alb(args):
-    if args.image_size < 518:
-        crop_aug = crop_augmentation(518)
-    else:
-        crop_aug = crop_augmentation(args.image_size)
-    train_transforms: A.Compose = A.Compose([crop_aug,
-                                             A.SmallestMaxSize(max_size=args.image_size),
-                                             A.HorizontalFlip(p=args.hflip),
-                                             A.VerticalFlip(p=args.vflip),
-                                             # A.ColorJitter(),
-                                             # A.PlanckianJitter(),
-                                             A.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-                                             ToTensorV2(),
-                                             ], bbox_params=A.BboxParams("coco", clip=True),
-                                            keypoint_params=A.KeypointParams(format='xy'))
-
-    return train_transforms
-
-
-def make_train_transforms_alb_pdisco(args):
-    if args.pdisco_image_size < 518:
-        crop_aug = crop_augmentation(518)
-    else:
-        crop_aug = crop_augmentation(args.pdisco_image_size)
-    train_transforms: A.Compose = A.Compose([crop_aug,
-                                             A.SmallestMaxSize(max_size=args.pdisco_image_size),
-                                             A.HorizontalFlip(p=args.hflip),
-                                             A.VerticalFlip(p=args.vflip),
-                                             # A.ColorJitter(),
-                                             # A.PlanckianJitter(),
-                                             A.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-                                             ToTensorV2(),
-                                             ], bbox_params=A.BboxParams("coco", clip=True),
-                                            keypoint_params=A.KeypointParams(format='xy'))
-
-    return train_transforms
-
-
-def make_test_transforms_alb(args):
-    if args.image_size < 518:
-        crop_aug = crop_augmentation(518)
-    else:
-        crop_aug = crop_augmentation(args.image_size)
-    test_transforms: A.Compose = A.Compose([crop_aug,
-                                            A.SmallestMaxSize(max_size=args.image_size),
-                                            A.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-                                            ToTensorV2(),
-                                            ],
-                                           bbox_params=A.BboxParams("coco", clip=True, label_fields=['category_ids']),
-                                           keypoint_params=A.KeypointParams(format='xy'))
-
-    return test_transforms
-
-
-def make_test_transforms_alb_pdisco(args):
-    if args.pdisco_image_size < 518:
-        crop_aug = crop_augmentation(518)
-    else:
-        crop_aug = crop_augmentation(args.pdisco_image_size)
-    test_transforms: A.Compose = A.Compose([crop_aug,
-                                            A.SmallestMaxSize(max_size=args.pdisco_image_size),
-                                            A.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
-                                            ToTensorV2(),
-                                            ],
-                                           bbox_params=A.BboxParams("coco", clip=True, label_fields=['category_ids']),
-                                           keypoint_params=A.KeypointParams(format='xy'))
-
-    return test_transforms
-
-
 def load_train_transforms_siim_acr(args):
     cxr_mean = (0.48865, 0.48865, 0.48865)
     cxr_std = (0.24621, 0.24621, 0.24621)
@@ -205,22 +130,14 @@ def load_train_transforms_siim_acr(args):
 
 def load_transforms(args):
     # Get the transforms and load the dataset
-    if args.use_albumentations:
-        if args.pdiscoformer_pretrained_path is not None:
-            train_transforms = make_train_transforms_alb_pdisco(args)
-            test_transforms = make_test_transforms_alb_pdisco(args)
-        else:
-            train_transforms = make_train_transforms_alb(args)
-            test_transforms = make_test_transforms_alb(args)
+    if args.augmentations_to_use == 'timm':
+        train_transforms = build_transform_timm(args, is_train=True)
+    elif args.augmentations_to_use == 'cub_original':
+        train_transforms = make_train_transforms(args)
+    elif args.augmentations_to_use == 'siim_acr':
+        train_transforms, test_transforms = load_train_transforms_siim_acr(args)
+        return train_transforms, test_transforms
     else:
-        if args.augmentations_to_use == 'timm':
-            train_transforms = build_transform_timm(args, is_train=True)
-        elif args.augmentations_to_use == 'cub_original':
-            train_transforms = make_train_transforms(args)
-        elif args.augmentations_to_use == 'siim_acr':
-            train_transforms, test_transforms = load_train_transforms_siim_acr(args)
-            return train_transforms, test_transforms
-        else:
-            raise ValueError('Augmentations not supported.')
-        test_transforms = make_test_transforms(args)
+        raise ValueError('Augmentations not supported.')
+    test_transforms = make_test_transforms(args)
     return train_transforms, test_transforms

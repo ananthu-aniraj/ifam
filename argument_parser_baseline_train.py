@@ -59,8 +59,8 @@ def parse_args():
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
     # Augmentation parameters
-    parser.add_argument('--augmentations_to_use', type=str, default='timm',
-                        choices=['timm', 'torchvision', 'cub_original'])
+    parser.add_argument('--augmentations_to_use', type=str, default='cub_original',
+                        choices=['timm', 'siim_acr', 'cub_original'])
     parser.add_argument('--image_size', default=448, type=int)
     parser.add_argument('--color_jitter', type=float, default=0.1, metavar='PCT',
                         help='Color jitter factor (default: 0.1)')

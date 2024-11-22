@@ -65,7 +65,7 @@ def parse_args():
 
     # Augmentation parameters
     parser.add_argument('--augmentations_to_use', type=str, default='cub_original',
-                        choices=['timm', 'torchvision', 'cub_original', 'siim_acr'])
+                        choices=['timm', 'cub_original', 'siim_acr'])
     parser.add_argument('--image_size', default=448, type=int)
     parser.add_argument('--color_jitter', type=float, default=0.1, metavar='PCT',
                         help='Color jitter factor (default: 0.1)')
@@ -186,7 +186,6 @@ def parse_args():
     # Array training job
     parser.add_argument('--array_training_job', default=False, action='store_true',
                         help='Whether to run as an array job (i.e. training with multiple random seeds on the same settings)')
-    parser.add_argument('--use_albumentations', default=False, action='store_true')
 
     # Use part logit thresholds (only for evaluation)
     parser.add_argument('--part_logits_threshold_path', default="", type=str)
