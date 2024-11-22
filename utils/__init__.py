@@ -5,6 +5,5 @@ from .wandb_params import *
 from .visualize_att_maps import *
 from .misc_utils import *
 from .get_landmark_coordinates import *
-from .spot_utils import *
 
 
