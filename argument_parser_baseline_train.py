@@ -136,14 +136,6 @@ def parse_args():
     parser.add_argument('--resume_training', action='store_true', default=False)
     parser.add_argument('--wandb_resume_id', default=None, type=str)
 
-    # Top-k loss params
-    parser.add_argument('--use_imbalanced_noised_topk', default=False, action='store_true')
-    parser.add_argument('--topk_k', default=5, type=int)
-    parser.add_argument('--topk_epsilon', default=0.01, type=float)
-    parser.add_argument('--max_m', default=0.2, type=float)
-    parser.add_argument('--topk_scale', default=60, type=int)
-    parser.add_argument('--topk_n_sample', default=5, type=int)
-
     # Array training job
     parser.add_argument('--array_training_job', default=False, action='store_true',
                         help='Whether to run as an array job (i.e. training with multiple random seeds on the same settings)')
