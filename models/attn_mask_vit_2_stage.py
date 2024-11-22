@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
-from typing import Tuple
 from timm.models.vision_transformer import Attention, Block
 from layers import MaskedBlock, MaskedAttention, PatchPruning, SPMaskedBlock, \
-    SPMaskedAttention, SPBlock, SPAttention, SimPool, AttentionPoolLatentMod
+    SPMaskedAttention, SPBlock, SPAttention
 
 
 class AttnMaskViT2Stage(torch.nn.Module):
