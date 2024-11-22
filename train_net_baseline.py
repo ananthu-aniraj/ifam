@@ -68,7 +68,6 @@ def baseline_train_eval():
                             seed=args.seed,
                             eval_only=args.eval_only,
                             use_ddp=use_ddp,
-                            num_samples_per_class=args.num_samples_per_class,
                             )
 
     # End the timer and print out how long it took

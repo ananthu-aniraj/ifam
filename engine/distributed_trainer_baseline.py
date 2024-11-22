@@ -39,7 +39,6 @@ class BaselineTrainer:
             mixup_fn: Optional[Mixup] = None,
             eval_only: bool = False,
             use_ddp: bool = False,
-            num_samples_per_class: int = 100,
     ) -> None:
         self._init_ddp(use_ddp)
         self.num_classes = model.num_classes
@@ -51,8 +50,6 @@ class BaselineTrainer:
         self.test_dataset = test_dataset
         self.batch_size = batch_size
         self.eval_only = eval_only
-        # Number of samples per class for class balanced sampling
-        self.num_samples_per_class = num_samples_per_class
         self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers, drop_last=True, shuffle=True)
         self.test_loader = self._prepare_dataloader(test_dataset, num_workers=num_workers, drop_last=False)
         if len(loss_fn) == 1:
@@ -488,7 +485,6 @@ def launch_baseline_trainer(model: torch.nn.Module,
                             seed: int = 42,
                             eval_only: bool = False,
                             use_ddp: bool = False,
-                            num_samples_per_class: int = 100,
                             ) -> None:
     """Trains and tests a PyTorch model.
 
@@ -517,8 +513,6 @@ def launch_baseline_trainer(model: torch.nn.Module,
     seed: An integer indicating the random seed to use.
     eval_only: A boolean indicating whether to only run evaluation.
     use_ddp: A boolean indicating whether to use DDP.
-    num_samples_per_class: An integer indicating the number of samples per class for class-balanced sampling
-    @rtype: None
     """
 
     set_seeds(seed)
@@ -532,8 +526,7 @@ def launch_baseline_trainer(model: torch.nn.Module,
                               log_freq=log_freq,
                               use_amp=use_amp,
                               grad_norm_clip=grad_norm_clip, max_epochs=epochs, num_workers=num_workers,
-                              mixup_fn=mixup_fn, eval_only=eval_only, use_ddp=use_ddp,
-                              num_samples_per_class=num_samples_per_class)
+                              mixup_fn=mixup_fn, eval_only=eval_only, use_ddp=use_ddp)
     if eval_only:
         trainer.test_only()
     else:
