@@ -14,8 +14,6 @@ from timm.data import Mixup
 
 from utils.training_utils.snapshot_class import Snapshot
 from utils.wandb_params import init_wandb
-from utils.data_utils.class_balanced_distributed_sampler import ClassBalancedDistributedSampler
-from utils.data_utils.class_balanced_sampler import ClassBalancedRandomSampler
 from utils.training_utils.ddp_utils import ddp_setup, set_seeds
 from utils.training_utils.engine_utils import AverageMeter
 
@@ -56,9 +54,8 @@ class BaselineTrainer:
         self.eval_only = eval_only
         # Number of samples per class for class balanced sampling
         self.num_samples_per_class = num_samples_per_class
-        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers,
-                                                     class_balanced_sampling=class_balanced_sampling)
-        self.test_loader = self._prepare_dataloader(test_dataset, num_workers=num_workers)
+        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers, drop_last=True, shuffle=True)
+        self.test_loader = self._prepare_dataloader(test_dataset, num_workers=num_workers, drop_last=False)
         if len(loss_fn) == 1:
             self.loss_fn_train = self.loss_fn_eval = loss_fn[0]
         else:
@@ -207,52 +204,30 @@ class BaselineTrainer:
                                                                           average="macro").to(self.local_rank,
                                                                                               non_blocking=True)}
 
-    def _prepare_dataloader_ddp(self, dataset: torch.utils.data.Dataset, num_workers: int = 4,
-                                class_balanced_sampling: bool = False):
-        if class_balanced_sampling:
-            return torch.utils.data.DataLoader(
-                dataset,
-                batch_size=self.batch_size,
-                pin_memory=True,
-                shuffle=False,
-                num_workers=num_workers,
-                drop_last=True,
-                sampler=ClassBalancedDistributedSampler(dataset, num_samples_per_class=self.num_samples_per_class)
-            )
-        else:
-            return torch.utils.data.DataLoader(
-                dataset,
-                batch_size=self.batch_size,
-                pin_memory=True,
-                shuffle=False,
-                num_workers=num_workers,
-                drop_last=True,
-                sampler=DistributedSampler(dataset)
-            )
+    def _prepare_dataloader_ddp(self, dataset: torch.utils.data.Dataset, num_workers: int = 4):
+        return torch.utils.data.DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            pin_memory=True,
+            shuffle=False,
+            num_workers=num_workers,
+            drop_last=True,
+            sampler=DistributedSampler(dataset)
+        )
 
     def _prepare_dataloader(self, dataset: torch.utils.data.Dataset, num_workers: int = 4,
-                            class_balanced_sampling: bool = False):
+                            drop_last: bool = False, shuffle: bool = False) -> DataLoader:
         if self.use_ddp:
-            return self._prepare_dataloader_ddp(dataset, num_workers, class_balanced_sampling)
+            return self._prepare_dataloader_ddp(dataset, num_workers=num_workers)
 
-        if class_balanced_sampling:
-            return torch.utils.data.DataLoader(
-                dataset,
-                batch_size=self.batch_size,
-                pin_memory=True,
-                shuffle=False,
-                num_workers=num_workers,
-                drop_last=True,
-                sampler=ClassBalancedRandomSampler(dataset, num_samples_per_class=self.num_samples_per_class))
-        else:
-            return torch.utils.data.DataLoader(
-                dataset,
-                batch_size=self.batch_size,
-                pin_memory=True,
-                shuffle=False,
-                num_workers=num_workers,
-                drop_last=True,
-            )
+        return torch.utils.data.DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            pin_memory=True,
+            shuffle=shuffle,
+            num_workers=num_workers,
+            drop_last=drop_last,
+        )
 
     def _load_snapshot(self) -> None:
         loc = f"cuda:{self.local_rank}"

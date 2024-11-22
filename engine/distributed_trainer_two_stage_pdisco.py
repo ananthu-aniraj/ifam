@@ -61,8 +61,8 @@ class PDiscoTrainerTwoStage:
         self.sub_path_test = sub_path_test
         self.batch_size = batch_size
         self.eval_only = eval_only
-        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers)
-        self.test_loader = self._prepare_dataloader(test_dataset, num_workers=num_workers, drop_last=False)
+        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers, shuffle=True, drop_last=True)
+        self.test_loader = self._prepare_dataloader(test_dataset, num_workers=num_workers, drop_last=False, shuffle=False)
         if len(loss_fn) == 1:
             self.loss_fn_train = self.loss_fn_eval = loss_fn[0]
             self.loss_fn_stage_1_train = loss_fn[0]
@@ -352,7 +352,7 @@ class PDiscoTrainerTwoStage:
         )
 
     def _prepare_dataloader(self, dataset: torch.utils.data.Dataset, num_workers: int = 4,
-                            drop_last: bool = True):
+                            drop_last: bool = True, shuffle: bool = False):
         if self.use_ddp:
             return self._prepare_dataloader_ddp(dataset, num_workers)
         else:
@@ -360,7 +360,7 @@ class PDiscoTrainerTwoStage:
                 dataset,
                 batch_size=self.batch_size,
                 pin_memory=True,
-                shuffle=False,
+                shuffle=shuffle,
                 num_workers=num_workers,
                 drop_last=drop_last,
             )
