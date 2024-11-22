@@ -1,7 +1,8 @@
 import torch
 from typing import List
 from transformers.models.dinov2.configuration_dinov2 import Dinov2Config
-from .hf_transformers_dinov2 import DinoV2ModelAttnMask2Stage, DinoV2PDiscoHF
+from .individual_landmark_vit_2_stage_mod_hf import DinoV2PDiscoHF
+from .attn_mask_vit_2_stage_hf import DinoV2ModelAttnMask2Stage
 
 
 class FullTwoStageModelDoubleClassifyHF(torch.nn.Module):
