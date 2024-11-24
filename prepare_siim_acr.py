@@ -162,8 +162,7 @@ def preprocess_siim_acr(pkl_file_path, root_dir):
 
     dest_path = os.path.join(root_dir, "all_masks")
     Path(dest_path).mkdir(parents=True, exist_ok=True)
-    print("Creating masks")
-    for index, row in df.iterrows():
+    for index, row in tqdm(df.iterrows(), total=len(df), desc="creating masks"):
         if row["target"] == 1:
             mask = rle2mask(row["encoded_pixels"], 1024, 1024)
             cv2.imwrite(os.path.join(dest_path, row["id"] + ".png"), mask)
