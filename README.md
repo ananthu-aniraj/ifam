@@ -8,3 +8,110 @@ We introduce an interpretable-by-design method based on learned binary attention
 # Setup
 To install the required packages, run the following command:
 ```conda env create -f environment.yml```
+
+Otherwise, you can also individually install the following packages:
+1. [PyTorch](https://pytorch.org/get-started/locally/): Tested upto version 2.5.1, please raise an issue if you face any problems with more recent versions.
+2. [Colorcet](https://colorcet.holoviz.org/getting_started/index.html)
+3. [Matplotlib](https://matplotlib.org/stable/users/installing.html)
+4. [OpenCV](https://pypi.org/project/opencv-python-headless/)
+5. [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html)
+6. [Scikit-Image](https://scikit-image.org/docs/stable/install.html)
+7. [Scikit-Learn](https://scikit-learn.org/stable/install.html) 
+8. [TorchMetrics](https://torchmetrics.readthedocs.io/en/latest/pages/install.html)
+9. [timm](https://pypi.org/project/timm/)
+10. [wandb](https://pypi.org/project/wandb/): It is recommended to create an account and use it for tracking the experiments. Use the '--wandb' flag when running the training script to enable this feature.
+11. [pycocotools](https://pypi.org/project/pycocotools/)
+12. [pytopk](https://pypi.org/project/pytopk/)
+13. [huggingface-hub](https://pypi.org/project/huggingface-hub/)
+14. [pydicom](https://pydicom.github.io/pydicom/stable/tutorials/installation.html)
+15. [albumentations](https://albumentations.ai/docs/getting_started/installation/)
+
+# Datasets
+### CUB
+The dataset can be downloaded from [here](https://www.vision.caltech.edu/datasets/cub_200_2011/). 
+The segmentation masks can be downloaded from [here](https://data.caltech.edu/records/w9d68-gec53) for the Foreground mIoU evaluation.
+
+The folder structure should look like this:
+
+```
+CUB_200_2011
+├── attributes
+├── bounding_boxes.txt
+├── classes.txt
+├── images
+├── image_class_labels.txt
+├── images.txt
+├── parts
+├── segmentations
+├── README
+└── train_test_split.txt
+```
+
+### Waterbirds
+The dataset can be downloaded from [here](https://nlp.stanford.edu/data/dro/waterbird_complete95_forest2water2.tar.gz).
+Extract it into the CUB_200_2011 folder to get the following structure:
+
+```
+CUB_200_2011
+|── waterbird_complete95_forest2water2
+├── attributes
+├── bounding_boxes.txt
+├── classes.txt
+├── images
+├── image_class_labels.txt
+├── images.txt
+├── parts
+├── segmentations
+├── README
+└── train_test_split.txt
+```
+
+
+### Metashifts (Cat vs Dog)
+Follow the instructions from this repository to download the Metashifts sub-set [here](https://github.com/Wuyxin/DISC?tab=readme-ov-file).
+
+The folder structure should look like this:
+
+```
+MetaDatasetCatDog
+|── test
+|   |── cat
+|   |   |── cat(shelf)
+|   |── dog
+|   |   |── dog(shelf)
+|── train
+|   |── cat
+|   |   |── cat(bed)
+|   |   |── cat(sofa)
+|   |── dog
+|   |   |── dog(bench)
+|   |   |── dog(bike)
+```
+
+### SIIM-ACR Pneumothorax Segmentation
+The dataset can be downloaded from [here](https://www.kaggle.com/datasets/jesperdramsch/siim-acr-pneumothorax-segmentation-data/data).
+The pkl file containing chest tube presence annotations can be downloaded from [here](https://github.com/khaledsaab/spatial_specificity/blob/main/cxr_tube_dict.pkl).
+
+
+After downloading the dataset, run the provided script to extract the images and masks.
+``` python prepare_siim_acr.py --pkl_file_path <path to the pkl file> --root_dir <path where images are stored>```
+
+The folder structure should look like this:
+
+```
+(root folder)
+|── all_masks
+|── full_test_set
+|── train_set
+|── robust_test_set
+└── non_robust_test_set
+```
+# Training
+The details of running the training script can be found in the [training instructions](training_instructions.md) file.
+
+# Evaluation
+The details of running the evaluation metrics for both classification and part discovery can be found in the [evaluation instructions](eval_instructions.md) file.
+
+
+# Issues and Questions
+Feel free to raise an issue if you face any problems with the code or have any questions about the paper.
