@@ -110,7 +110,7 @@ The folder structure should look like this:
 The details of running the training script can be found in the [training instructions](training_instructions.md) file.
 
 # Evaluation
-The details of running the evaluation metrics for both classification and part discovery can be found in the [evaluation instructions](eval_instructions.md) file.
+The details of running the evaluation metrics can be found in the [evaluation instructions](eval_instructions.md) file.
 
 
 # Issues and Questions
