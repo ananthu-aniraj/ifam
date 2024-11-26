@@ -1,4 +1,5 @@
 # Compostion of the VisionTransformer class from timm with extra features: https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py
+# Ref: https://github.com/ananthu-aniraj/pdiscoformer/blob/main/models/individual_landmark_vit.py
 import torch
 import torch.nn as nn
 from torch import Tensor

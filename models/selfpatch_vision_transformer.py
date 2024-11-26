@@ -1,3 +1,4 @@
+# Ref: https://github.com/alinlab/SelfPatch/blob/main/selfpatch_vision_transformer.py
 import math
 import os
 from functools import partial
