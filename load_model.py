@@ -249,12 +249,20 @@ def load_model_arch_2_stage(args, stage_num):
     return base_model
 
 
-def load_model_2_stage(args, dataset_test, num_cls):
-    if args.part_logits_threshold_path:
-        with open(args.part_logits_threshold_path, 'r') as f:
-            part_logits_threshold = json.load(f)
-    else:
+def load_part_logits_threshold(args):
+    try:
+        if args.part_logits_threshold_path:
+            with open(args.part_logits_threshold_path, 'r') as f:
+                part_logits_threshold = json.load(f)
+        else:
+            part_logits_threshold = None
+    except:
         part_logits_threshold = None
+    return part_logits_threshold
+
+
+def load_model_2_stage(args, dataset_test, num_cls):
+    part_logits_threshold = load_part_logits_threshold(args)
 
     if args.use_hf_transformers:
         model = load_model_2_stage_hf(args, num_cls, part_logits_threshold)
