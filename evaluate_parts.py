@@ -140,7 +140,7 @@ def main(args):
     args.pretrained_start_weights = True
 
     # Load the model
-    net = load_model_2_stage(args, eval_data, num_cls)
+    net = load_model_2_stage(args, num_cls)
     snapshot_data = torch.load(args.model_path, map_location=torch.device('cpu'), weights_only=True)
     if 'model_state' in snapshot_data:
         _, state_dict = load_state_dict_snapshot(snapshot_data)

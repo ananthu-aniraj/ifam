@@ -31,7 +31,7 @@ def pdisco_train_eval():
     dataset_train, dataset_test, num_cls = get_dataset(args, train_transforms, test_transforms)
 
     # Load the model
-    model = load_model_2_stage(args, dataset_test, num_cls)
+    model = load_model_2_stage(args, num_cls)
 
     # Check if there are multiple GPUs
     use_ddp = multi_gpu_check()

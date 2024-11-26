@@ -260,7 +260,7 @@ def load_part_logits_threshold(args):
     return part_logits_threshold
 
 
-def load_model_2_stage(args, dataset_test, num_cls):
+def load_model_2_stage(args, num_cls):
     part_logits_threshold = load_part_logits_threshold(args)
 
     if args.use_hf_transformers:

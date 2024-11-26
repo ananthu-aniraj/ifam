@@ -108,7 +108,7 @@ def benchmark(args):
     else:
         raise ValueError('Dataset not supported.')
     # Load the model
-    model = load_model_2_stage(args, eval_data, num_cls)
+    model = load_model_2_stage(args, num_cls)
     snapshot_data = torch.load(args.model_path, map_location=torch.device('cpu'), weights_only=True)
     if 'model_state' in snapshot_data:
         _, state_dict = load_state_dict_snapshot(snapshot_data)
