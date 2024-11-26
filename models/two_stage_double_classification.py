@@ -7,21 +7,16 @@ from .attn_mask_vit_2_stage import AttnMaskViT2Stage
 class FullTwoStageModelDoubleClassify(torch.nn.Module):
     def __init__(self, init_model_stage_1: torch.nn.Module, init_model_stage_2: torch.nn.Module, num_landmarks: int = 8,
                  num_classes: int = 200, return_transformer_qkv: bool = False, gumbel_softmax: bool = True,
-                 softmax_temperature: float = 1.0, gumbel_softmax_hard: bool = False,
-                 part_dropout: float = 0.3, part_dropout_stage_2: float = 0.3,
+                 softmax_temperature: float = 1.0, part_dropout: float = 0.3, part_dropout_stage_2: float = 0.3,
                  part_logits_threshold: dict = None, use_soft_masks: bool = False) -> None:
         super().__init__()
 
         self.stage_1 = IndividualLandmarkViT2StageMod(init_model=init_model_stage_1, num_landmarks=num_landmarks,
-                                                      return_transformer_qkv=return_transformer_qkv,
-                                                      gumbel_softmax=gumbel_softmax,
-                                                      softmax_temperature=softmax_temperature,
-                                                      gumbel_softmax_hard=gumbel_softmax_hard,
-                                                      part_dropout=part_dropout,
+                                                      num_classes=num_classes, part_dropout=part_dropout,
                                                       part_dropout_stage_2=part_dropout_stage_2,
-                                                      num_classes=num_classes,
-                                                      modulation_type="layer_norm",
-                                                      classifier_type="linear",
+                                                      return_transformer_qkv=return_transformer_qkv,
+                                                      modulation_type="layer_norm", gumbel_softmax=gumbel_softmax,
+                                                      softmax_temperature=softmax_temperature, classifier_type="linear",
                                                       part_logits_threshold=part_logits_threshold)
         self.stage_2 = AttnMaskViT2Stage(init_model=init_model_stage_2, num_classes=num_classes,
                                          reinit_fc_norm=True, use_soft_masks=use_soft_masks)
@@ -29,8 +24,6 @@ class FullTwoStageModelDoubleClassify(torch.nn.Module):
         self.num_landmarks = num_landmarks
         self.num_classes = num_classes
         self.orig_prefix_tokens = init_model_stage_2.num_prefix_tokens
-        self.gumbel_softmax = gumbel_softmax
-        self.gumbel_softmax_hard = gumbel_softmax_hard
         self.use_soft_masks = use_soft_masks
 
     def forward(self, x: torch.Tensor, part_ids_to_remove: List[int] = None) -> torch.Tensor:

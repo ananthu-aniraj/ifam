@@ -16,8 +16,7 @@ class IndividualLandmarkViT2StageMod(torch.nn.Module):
 
     def __init__(self, init_model: torch.nn.Module, num_landmarks: int = 8, num_classes: int = 200,
                  part_dropout: float = 0.3, part_dropout_stage_2: float = 0.3, return_transformer_qkv: bool = False,
-                 modulation_type: str = "original", gumbel_softmax: bool = False,
-                 softmax_temperature: float = 1.0, gumbel_softmax_hard: bool = False,
+                 modulation_type: str = "original", gumbel_softmax: bool = False, softmax_temperature: float = 1.0,
                  classifier_type: str = "linear", part_logits_threshold: dict = None) -> None:
         super().__init__()
         self.num_landmarks = num_landmarks
@@ -44,7 +43,6 @@ class IndividualLandmarkViT2StageMod(torch.nn.Module):
         self.fc_landmarks = torch.nn.Conv2d(self.feature_dim, num_landmarks + 1, 1, bias=False)
         self.gumbel_softmax = gumbel_softmax
         self.softmax_temperature = softmax_temperature
-        self.gumbel_softmax_hard = gumbel_softmax_hard
         self.modulation_type = modulation_type
         if modulation_type == "layer_norm":
             self.modulation = torch.nn.LayerNorm([self.feature_dim, self.num_landmarks + 1])

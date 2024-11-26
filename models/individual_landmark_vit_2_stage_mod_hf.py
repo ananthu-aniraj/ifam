@@ -10,7 +10,7 @@ from utils import gumbel_softmax_straight_through_custom
 
 class DinoV2PDiscoHF(Dinov2PreTrainedModel):
     def __init__(self, config: Dinov2Config, num_landmarks: int, num_classes: int, part_dropout: float,
-                 part_dropout_stage_2: float,
+                 part_dropout_stage_2: float, gumbel_softmax: bool,
                  softmax_temperature: float, part_logits_threshold: dict = None):
         super().__init__(config)
         self.config = config
@@ -30,6 +30,7 @@ class DinoV2PDiscoHF(Dinov2PreTrainedModel):
         self.dropout_full_landmarks = torch.nn.Dropout1d(part_dropout)
         self.fc_class_landmarks = torch.nn.Linear(in_features=self.feature_dim, out_features=num_classes,
                                                   bias=False)
+        self.gumbel_softmax = gumbel_softmax
         self.softmax_temperature = softmax_temperature
         self.part_dropout_stage_2 = part_dropout_stage_2
 
@@ -94,9 +95,13 @@ class DinoV2PDiscoHF(Dinov2PreTrainedModel):
                 ab_thresh = torch.where(ab_fg < thresholds, torch.tensor(-torch.inf, device=ab.device), ab_fg)
                 part_logits[:, :-1, :, :] = ab_thresh
                 part_logits[:, -1, :, :] = ab[:, -1, :, :]
-
-        maps = torch.nn.functional.gumbel_softmax(part_logits, dim=1, tau=self.softmax_temperature,
-                                                  hard=False)  # [B, num_landmarks + 1, H, W]
+        softmax_temp = self.softmax_temperature
+        # Softmax so that the attention maps for each pixel add up to 1
+        if self.gumbel_softmax:
+            maps = torch.nn.functional.gumbel_softmax(part_logits, dim=1, tau=softmax_temp,
+                                                      hard=False)  # [B, num_landmarks + 1, H, W]
+        else:
+            maps = torch.nn.functional.softmax(part_logits / softmax_temp, dim=1)  # [B, num_landmarks + 1, H, W]
 
         maps_fg_bg_hard, maps_fg_bg_soft = gumbel_softmax_straight_through_custom(part_logits,
                                                                                   tau=self.softmax_temperature,

@@ -1,14 +1,14 @@
 import torch
 from timeit import default_timer as timer
 
-from argument_parser_two_stage_pdisco_train import parse_args
+from argument_parser_train_net import parse_args
 from utils.data_utils.transform_utils import load_transforms
 from utils.training_utils.optimizer_params import build_optimizer, layer_group_matcher_pdisco_2_stage
 from utils.training_utils.scheduler_params import build_scheduler
 from utils.misc_utils import sync_bn_conversion, check_snapshot
 from utils.training_utils.ddp_utils import multi_gpu_check
 from utils.wandb_params import get_train_loggers
-from engine.distributed_trainer_two_stage_pdisco import launch_pdisco_2_stage_trainer
+from engine.distributed_trainer_two_stage import launch_pdisco_2_stage_trainer
 from load_dataset import get_dataset
 from load_model import load_model_2_stage
 from load_losses import load_classification_loss, load_loss_hyper_params

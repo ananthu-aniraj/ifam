@@ -8,13 +8,13 @@ from .attn_mask_vit_2_stage_hf import DinoV2ModelAttnMask2Stage
 class FullTwoStageModelDoubleClassifyHF(torch.nn.Module):
     def __init__(self, init_model: torch.nn.Module, config: Dinov2Config, num_landmarks: int = 8,
                  num_classes: int = 200, softmax_temperature: float = 1.0, part_dropout: float = 0.3,
-                 part_dropout_stage_2: float = 0.3,
+                 part_dropout_stage_2: float = 0.3, gumbel_softmax: bool = False,
                  part_logits_threshold: dict = None, use_soft_masks: bool = False) -> None:
         super().__init__()
         self.stage_1 = DinoV2PDiscoHF(config=config, num_landmarks=num_landmarks,
                                       num_classes=num_classes, softmax_temperature=softmax_temperature,
                                       part_dropout=part_dropout, part_dropout_stage_2=part_dropout_stage_2,
-                                      part_logits_threshold=part_logits_threshold)
+                                      part_logits_threshold=part_logits_threshold, gumbel_softmax=gumbel_softmax)
         self.stage_2 = DinoV2ModelAttnMask2Stage(config=config, num_classes=num_classes, use_soft_masks=use_soft_masks)
         self.stage_1.load_state_dict(init_model.state_dict(), strict=False)
         self.stage_2.load_state_dict(init_model.state_dict(), strict=False)
@@ -22,7 +22,7 @@ class FullTwoStageModelDoubleClassifyHF(torch.nn.Module):
         self.num_landmarks = num_landmarks
         self.num_classes = num_classes
         self.orig_prefix_tokens = 1
-        self.gumbel_softmax = True
+        self.gumbel_softmax = gumbel_softmax
         self.use_soft_masks = use_soft_masks
 
     def forward(self, x: torch.Tensor, part_ids_to_remove: List[int] = None) -> torch.Tensor:

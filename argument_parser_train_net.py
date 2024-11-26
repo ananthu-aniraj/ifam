@@ -22,10 +22,6 @@ def parse_args():
     parser.add_argument('--train_split', default=0.9, type=float, help='fraction of training data to use')
     parser.add_argument('--eval_mode', default='val', type=str,
                         help='which split to use for evaluation')
-    parser.add_argument('--anno_path_train', default='', type=str, required=False)
-    parser.add_argument('--anno_path_test', default='', type=str, required=False)
-    parser.add_argument('--metadata_path', default='', type=str, required=False)
-    parser.add_argument('--species_id_to_name_file', default='', type=str, required=False)
     parser.add_argument('--mask_sub_path', default='all_masks', type=str, required=False)
 
     # Training
@@ -163,7 +159,6 @@ def parse_args():
                         type=str)
     parser.add_argument('--pixel_wise_entropy_loss', default=1.0, type=float)
     parser.add_argument('--orthogonality_loss_landmarks', default=1.0, type=float)
-    parser.add_argument('--koleo_loss', default=0.0, type=float)
 
     # Equivariance affine transform params
     parser.add_argument('--degrees', default=90, type=float)

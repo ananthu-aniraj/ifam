@@ -267,7 +267,6 @@ def load_model_2_stage(args, dataset_test, num_cls):
                                                 num_landmarks=args.num_parts,
                                                 gumbel_softmax=args.gumbel_softmax,
                                                 softmax_temperature=args.softmax_temperature,
-                                                gumbel_softmax_hard=args.gumbel_softmax_hard,
                                                 part_dropout=args.part_dropout,
                                                 part_dropout_stage_2=args.part_dropout_stage_2,
                                                 part_logits_threshold=part_logits_threshold,
@@ -280,6 +279,7 @@ def load_model_2_stage_hf(args, num_cls, part_logits_threshold):
     init_model = AutoModel.from_pretrained(args.model_arch)
     model = FullTwoStageModelDoubleClassifyHF(init_model, init_model.config, num_classes=num_cls,
                                               num_landmarks=args.num_parts,
+                                              gumbel_softmax=args.gumbel_softmax,
                                               softmax_temperature=args.softmax_temperature,
                                               part_dropout=args.part_dropout,
                                               part_dropout_stage_2=args.part_dropout_stage_2,
