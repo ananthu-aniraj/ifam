@@ -9,6 +9,8 @@ import copy
 import os
 from pathlib import Path
 import matplotlib.pyplot as plt
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 from utils.training_utils.engine_utils import load_state_dict_snapshot
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from utils import factors, save_json
@@ -87,6 +89,14 @@ def calc_part_logits(args):
         num_cls = len(eval_data.classes)
         eval_data.num_classes = num_cls
     elif args.dataset == 'siim_acr':
+        cxr_mean = (0.48865, 0.48865, 0.48865)
+        cxr_std = (0.24621, 0.24621, 0.24621)
+        test_transforms: A.Compose = A.Compose([
+            A.ToRGB(always_apply=True),
+            A.Resize(args.image_size, args.image_size),
+            A.Normalize(mean=cxr_mean, std=cxr_std),
+            ToTensorV2()
+        ])
         eval_data = CXRDataset(args.data_path, image_sub_path='train_set',
                                mask_sub_path='all_masks', transform=test_transforms)
         num_cls = eval_data.num_classes
@@ -143,8 +153,8 @@ def calc_part_logits(args):
         part_logits_full_unmatched[key] = torch.cat(part_logits_full_unmatched[key], dim=0)
 
     if args.save_histograms:
-        n_rows = factors(args.num_parts)[-1]
-        n_cols = factors(args.num_parts)[-2]
+        n_rows = factors(args.num_parts+1)[-1]
+        n_cols = factors(args.num_parts+1)[-2]
         # Combine the histograms
         plt.figure(figsize=(20, 20))
         for idx, key in enumerate(part_logits_full_unmatched.keys()):

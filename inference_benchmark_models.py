@@ -7,6 +7,8 @@ import argparse
 from tqdm import tqdm
 import copy
 import os
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 from utils.training_utils.engine_utils import load_state_dict_snapshot
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
@@ -92,6 +94,14 @@ def benchmark(args):
         num_cls = len(eval_data.classes)
         eval_data.num_classes = num_cls
     elif args.dataset == 'siim_acr':
+        cxr_mean = (0.48865, 0.48865, 0.48865)
+        cxr_std = (0.24621, 0.24621, 0.24621)
+        test_transforms: A.Compose = A.Compose([
+            A.ToRGB(always_apply=True),
+            A.Resize(args.image_size, args.image_size),
+            A.Normalize(mean=cxr_mean, std=cxr_std),
+            ToTensorV2()
+        ])
         eval_data = CXRDataset(args.data_path, image_sub_path=args.image_sub_path_test,
                                mask_sub_path=args.mask_sub_path, transform=test_transforms)
         num_cls = eval_data.num_classes
