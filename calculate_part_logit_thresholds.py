@@ -22,7 +22,7 @@ torch.cuda.manual_seed(0)
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Inference benchmark models')
+    parser = argparse.ArgumentParser(description='Calculate part logit thresholds')
     parser.add_argument('--model_arch', default='resnet50', type=str,
                         help='pick model architecture')
     parser.add_argument('--use_torchvision_resnet_model', default=False, action='store_true')
