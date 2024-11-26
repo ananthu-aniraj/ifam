@@ -149,8 +149,8 @@ def calc_part_logits(args):
         plt.figure(figsize=(20, 20))
         for idx, key in enumerate(part_logits_full_unmatched.keys()):
             plt.subplot(n_rows, n_cols, idx + 1)
-            plt.hist(part_logits_full_unmatched[key], alpha=0.5, label=f"Part {key} - Unmatched", density=True)
-            plt.hist(part_logits_full_matched[key], alpha=0.5, label=f"Part {key} - Matched", density=True)
+            plt.hist(part_logits_full_unmatched[key].cpu(), alpha=0.5, label=f"Part {key} - Unmatched", density=True)
+            plt.hist(part_logits_full_matched[key].cpu(), alpha=0.5, label=f"Part {key} - Matched", density=True)
             plt.legend()
             plt.title(f"Part {key}")
         plt.savefig(os.path.join(args.save_path, "part_logits_histogram.png"))
