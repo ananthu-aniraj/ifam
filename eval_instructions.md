@@ -115,6 +115,16 @@ python train_net.py \
 The `part_logits_threshold_path` is the path to the file containing the threshold values for each part. The threshold values are used to remove the tokens with low-confidence part assignments. This in the form of a json file with keys as part indices and values as the threshold values.
 These values are calculated using the training set.
 
+To generate them, please use the following command:
+```
+python calculate_part_thresholds.py \
+--model_path <path to the model checkpoint> \
+--save_path <path to save the part logits threshold file> \
+<dataset specific arguments>
+< model specific parameters >
+```
+
+
 ### Leave one part out eval
 To evaluate the model with leave one part out evaluation, use the following command:
 ```

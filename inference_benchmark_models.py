@@ -52,7 +52,6 @@ def parse_args():
     # Gumbel Softmax
     parser.add_argument('--gumbel_softmax', default=False, action='store_true')
     parser.add_argument('--softmax_temperature', default=1.0, type=float)
-    parser.add_argument('--gumbel_softmax_hard', default=False, action='store_true')
 
     # Model path
     parser.add_argument('--model_path', default=None, type=str)
