@@ -81,6 +81,9 @@
       ```
       python train_net.py \
       --eval_only \
+      --model_arch microsoft/rad-dino \
+      --use_hf_transformers \
+      --pretrained_start_weights \
       --data_path <base path to dataset>/siim-acr-pneumothorax-segmentation-data/versions/1 \
       --dataset siim_acr \
       --image_sub_path_train train_set \
