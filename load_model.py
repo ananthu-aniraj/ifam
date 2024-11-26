@@ -7,6 +7,7 @@ from torchvision.models import get_model
 from models import BaselineViT, \
     FullTwoStageModelDoubleClassify, FullTwoStageModelDoubleClassifyHF, BaselineDInoV2HF
 from models.selfpatch_vision_transformer import vit_small_sp, load_pretrained_weights_sp
+from utils import load_json
 
 
 def load_model_arch(args, num_cls):
@@ -250,14 +251,12 @@ def load_model_arch_2_stage(args, stage_num):
 
 
 def load_part_logits_threshold(args):
+    part_logits_threshold = None
     try:
         if args.part_logits_threshold_path:
-            with open(args.part_logits_threshold_path, 'r') as f:
-                part_logits_threshold = json.load(f)
-        else:
-            part_logits_threshold = None
+            part_logits_threshold = load_json(args.part_logits_threshold_path)
     except:
-        part_logits_threshold = None
+        pass
     return part_logits_threshold
 
 
