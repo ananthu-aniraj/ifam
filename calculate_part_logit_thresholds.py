@@ -161,8 +161,11 @@ def calc_part_logits(args):
             thresholds[key] = torch.quantile(part_logits_full_matched[key], quantile).item()
         # Remove threshold for bg (last part)
         thresholds.pop(args.num_parts)
-        print(f"Quantile: {1-quantile}")
+        print(f"Quantile: {1 - quantile}")
         print(thresholds)
-        save_json(thresholds, os.path.join(args.save_path, f"{1-quantile}.json"))
+        save_json(thresholds, os.path.join(args.save_path, f"{1 - quantile}.json"))
 
 
+if __name__ == '__main__':
+    args = parse_args()
+    calc_part_logits(args)
