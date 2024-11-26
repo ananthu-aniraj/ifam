@@ -64,6 +64,7 @@ def calc_part_logits(args):
     args.eval_only = True
     args.pretrained_start_weights = True
     height = args.image_size
+    args.part_logits_threshold_path = ""
     Path(args.save_path).mkdir(parents=True, exist_ok=True)
     test_transforms = transforms.Compose([
         transforms.Resize(size=height),
