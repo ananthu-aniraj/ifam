@@ -137,3 +137,39 @@ python leave_one_out_eval.py \
 - It is also possible to evaluate the model by leaving out multiple parts at a time by specifying the `--intervention_fixed_part_id` argument. This argument specifies the part indices that should be left out during evaluation. The other parts are removed one at a time in this case.
 - Additionally, the `--part_logits_threshold_path` argument can be used if you want to use both types of interventions together.
 
+### Foreground Mask Evaluation (part of supplementary experiments)
+To evaluate the model with foreground mask evaluation (supplementary experiment), use the following command for model with K=16 parts:
+```
+python evaluate_parts.py \
+--model_arch hf_hub:timm/vit_base_patch14_reg4_dinov2.lvd142m \
+--data_path <base path to dataset>/CUB_200_2011 \
+--image_sub_path waterbird_complete95_forest2water2 \
+--dataset cub_seg \
+--center_crop \
+--eval_mode fg_bg \
+--num_parts 16 \
+--image_size 518 \
+--batch_size 2 \
+--num_workers 2 \
+--gumbel_softmax \
+--model_path <path to model> \
+ --part_logits_threshold_path <path to the part logits threshold file> \
+```
+### Key Point Evaluation (part of supplementary experiments)
+To evaluate the model with key point evaluation, use the following command for model with K=16 parts:
+```
+python evaluate_parts.py \
+--model_arch hf_hub:timm/vit_base_patch14_reg4_dinov2.lvd142m \
+--data_path <base path to dataset>/CUB_200_2011 \
+--image_sub_path waterbird_complete95_forest2water2 \
+--dataset cub \
+--center_crop \
+--eval_mode keypoint \
+--num_parts 16 \
+--image_size 518 \
+--batch_size 2 \
+--num_workers 2 \
+--gumbel_softmax \
+--model_path <path to model> \
+--part_logits_threshold_path <path to the part logits threshold file> \
+```

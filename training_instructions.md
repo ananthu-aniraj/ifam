@@ -139,6 +139,7 @@ torchrun \
 --mask_sub_path all_masks \
 --image_size 518 \
 --augmentations_to_use siim_acr \
+--enforced_presence_loss 0 \
 < model specific parameters >
 ```
 - MetaShifts dataset:
