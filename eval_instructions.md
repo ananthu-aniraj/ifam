@@ -137,7 +137,23 @@ python leave_one_out_eval.py \
 - It is also possible to evaluate the model by leaving out multiple parts at a time by specifying the `--intervention_fixed_part_id` argument. This argument specifies the part indices that should be left out during evaluation. The other parts are removed one at a time in this case.
 - Additionally, the `--part_logits_threshold_path` argument can be used if you want to use both types of interventions together.
 
-### Foreground Mask Evaluation (part of supplementary experiments)
+## Part and Foreground Discovery Evaluation
+
+We provide the code to evaluate the model with part and foreground mask discovery evaluation. The code is provided in the `evaluate_parts.py` script.
+This follows the same structure as provided in the PDiscoFormer repository [here](https://github.com/ananthu-aniraj/pdiscoformer/blob/main/evaluate_parts.py).
+
+### Specific Arguments
+- `--eval_mode`: There are 3 options: `nmi_ari`, `keypoint`, `fg_bg`.
+  - `nmi_ari`: This mode evaluates the model's part discovery performance using the Normalized Mutual Information (NMI) and Adjusted Rand Index (ARI) metrics. 
+  - `keypoint`: This mode evaluates the model's part discovery performance using the keypoint detection metrics. 
+  - `fg_bg`: This mode evaluates the model's part discovery performance using the foreground-background segmentation metrics. 
+- `--num_parts`: The number of foreground parts predicted by the model. This is the same value that was used during training.
+- `--center_crop`: This flag is necessary for evaluation on Vision Transformers. It crops the center of the image to the required size before evaluation. This is necessary because the Vision Transformer model requires a fixed input size. Additionally, if you want to evaluate with batch size > 1, you need to use the `--center_crop` flag.
+- `--model_path`: The path to the model checkpoint.
+- `--dataset`: The name of the dataset. This is used to load the dataset and the corresponding evaluation metrics. 
+
+### Specific Commands
+#### Foreground Mask Evaluation (part of supplementary experiments)
 To evaluate the model with foreground mask evaluation (supplementary experiment), use the following command for model with K=16 parts:
 ```
 python evaluate_parts.py \
@@ -155,7 +171,7 @@ python evaluate_parts.py \
 --model_path <path to model> \
  --part_logits_threshold_path <path to the part logits threshold file> \
 ```
-### Key Point Evaluation (part of supplementary experiments)
+#### Key Point Evaluation (part of supplementary experiments)
 To evaluate the model with key point evaluation, use the following command for model with K=16 parts:
 ```
 python evaluate_parts.py \
