@@ -1,5 +1,4 @@
-import os.path
-import json
+import os
 import torch
 import timm
 from timm.models import create_model
