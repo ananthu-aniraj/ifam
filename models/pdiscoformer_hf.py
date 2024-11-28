@@ -1,3 +1,4 @@
+# Modified from: https://github.com/ananthu-aniraj/pdiscoformer/blob/main/models/individual_landmark_vit.py
 from typing import Optional
 
 import torch
@@ -9,24 +10,23 @@ from layers import Dinov2PreTrainedModel, Dinov2Embeddings, Dinov2Encoder
 
 class DinoV2PDiscoOrigHF(Dinov2PreTrainedModel):
     def __init__(self, config: Dinov2Config, num_landmarks: int, num_classes: int, part_dropout: float,
-                 softmax_temperature: float):
+                 softmax_temperature: float, gumbel_softmax: bool) -> None:
         super().__init__(config)
         self.config = config
         self.num_landmarks = num_landmarks
         self.num_classes = num_classes
         self.noise_variance = 0.0
-        self.num_prefix_tokens = 1
-        self.gumbel_softmax = True
+        self.gumbel_softmax = gumbel_softmax
         self.modulation_orth = True
         self.classifier_type = "linear"
         self.embeddings = Dinov2Embeddings(config)
         self.encoder = Dinov2Encoder(config)
 
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.num_prefix_tokens = 1
         self.feature_dim = config.hidden_size
         self.h_fmap = int(config.image_size / config.patch_size)
         self.w_fmap = int(config.image_size / config.patch_size)
+        self.num_prefix_tokens = int(self.embeddings.position_embeddings.shape[1] - (self.h_fmap * self.w_fmap))
         self.unflatten = nn.Unflatten(1, (self.h_fmap, self.w_fmap))
         self.fc_landmarks = torch.nn.Conv2d(self.feature_dim, num_landmarks + 1, 1, bias=False)
         self.modulation = torch.nn.LayerNorm([self.feature_dim, self.num_landmarks + 1])
@@ -80,8 +80,11 @@ class DinoV2PDiscoOrigHF(Dinov2PreTrainedModel):
 
         dist = b_sq - 2 * ab + a_sq
         part_logits = -dist
-        maps = torch.nn.functional.gumbel_softmax(part_logits, dim=1, tau=self.softmax_temperature,
-                                                  hard=False)  # [B, num_landmarks + 1, H, W]
+        if self.gumbel_softmax:
+            maps = torch.nn.functional.gumbel_softmax(part_logits, dim=1, tau=self.softmax_temperature,
+                                                      hard=False)  # [B, num_landmarks + 1, H, W]
+        else:
+            maps = torch.nn.functional.softmax(part_logits/self.softmax_temperature, dim=1)  # [B, num_landmarks + 1, H, W]
 
         # Use maps to get weighted average features per landmark
         all_features = (maps.unsqueeze(1) * x.unsqueeze(2)).contiguous()  # [B, embed_dim, num_landmarks + 1, H, W]

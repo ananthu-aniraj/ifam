@@ -21,7 +21,7 @@ class FullTwoStageModelDoubleClassifyHF(torch.nn.Module):
         self.feature_dim = config.hidden_size
         self.num_landmarks = num_landmarks
         self.num_classes = num_classes
-        self.orig_prefix_tokens = 1
+        self.orig_prefix_tokens = self.stage_1.num_prefix_tokens
         self.gumbel_softmax = gumbel_softmax
         self.use_soft_masks = use_soft_masks
 

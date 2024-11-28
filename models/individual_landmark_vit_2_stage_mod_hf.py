@@ -20,10 +20,10 @@ class DinoV2PDiscoHF(Dinov2PreTrainedModel):
         self.encoder = Dinov2Encoder(config)
 
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.num_prefix_tokens = 1
         self.feature_dim = config.hidden_size
         self.h_fmap = int(config.image_size / config.patch_size)
         self.w_fmap = int(config.image_size / config.patch_size)
+        self.num_prefix_tokens = int(self.embeddings.position_embeddings.shape[1] - (self.h_fmap * self.w_fmap))
         self.unflatten = nn.Unflatten(1, (self.h_fmap, self.w_fmap))
         self.fc_landmarks = torch.nn.Conv2d(self.feature_dim, num_landmarks + 1, 1, bias=False)
         self.modulation = torch.nn.LayerNorm([self.feature_dim, self.num_landmarks + 1])
