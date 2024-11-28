@@ -11,7 +11,7 @@ import torch.nn as nn
 class PatchPruning(nn.Module):
     def __init__(
             self,
-            keep_ratio: float = 0.4,
+            keep_ratio: float = 1.0,
             num_prefix_tokens: int = 1,
             ordered: bool = True,
             return_indices: bool = True,

@@ -83,7 +83,7 @@ def benchmark(args):
     if args.dataset == 'cub':
         cub_path = args.data_path
         # define dataset and loader
-        eval_data = FineGrainedBirdClassificationDataset(cub_path, split=1, transform=test_transforms, mode='test')
+        eval_data = FineGrainedBirdClassificationDataset(cub_path, split=1, transform=test_transforms, mode='test', image_sub_path=args.image_sub_path)
         num_cls = eval_data.num_classes
     elif args.dataset == 'waterbirds':
         eval_data = WaterBirdsDataset(args.data_path, mode='test',
@@ -102,7 +102,7 @@ def benchmark(args):
             A.Normalize(mean=cxr_mean, std=cxr_std),
             ToTensorV2()
         ])
-        eval_data = CXRDataset(args.data_path, image_sub_path=args.image_sub_path_test,
+        eval_data = CXRDataset(args.data_path, image_sub_path=args.image_sub_path,
                                mask_sub_path=args.mask_sub_path, transform=test_transforms)
         num_cls = eval_data.num_classes
     else:

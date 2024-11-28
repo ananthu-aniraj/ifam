@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from transformers import Dinov2Config
 
-from layers import Dinov2PreTrainedModel, Dinov2Embeddings, Dinov2Encoder, Dinov2PatchEmbeddings
+from layers import Dinov2PreTrainedModel, Dinov2Embeddings, Dinov2Encoder, Dinov2PatchEmbeddings, PatchPruning
 
 
 class DinoV2ModelAttnMask2Stage(Dinov2PreTrainedModel):
@@ -18,10 +18,11 @@ class DinoV2ModelAttnMask2Stage(Dinov2PreTrainedModel):
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.fc_norm = nn.LayerNorm(self.embed_dim)
         self.head = nn.Linear(self.embed_dim, num_classes, bias=False)
-        self.num_prefix_tokens = 1
         self.h_fmap = int(config.image_size / config.patch_size)
         self.w_fmap = int(config.image_size / config.patch_size)
+        self.num_prefix_tokens = int(self.embeddings.position_embeddings.shape[1] - (self.h_fmap * self.w_fmap))
         self.use_soft_masks = use_soft_masks
+        self.patch_prune = PatchPruning(keep_ratio=1, num_prefix_tokens=self.num_prefix_tokens)
         self.register_buffer("prefix_attn_mask", torch.ones(1, self.num_prefix_tokens))
         self._init_weights_head()
 
@@ -58,6 +59,12 @@ class DinoV2ModelAttnMask2Stage(Dinov2PreTrainedModel):
 
         embedding_output = self.embeddings(pixel_values)
         prefix_token_attn_mask = self.prefix_attn_mask.expand(embedding_output.shape[0], -1)  # [B, num_prefix_tokens]
+        if not self.training and not self.use_soft_masks:
+            # Prune patches from bg (as much as possible)
+            num_keep = attn_mask_per_img.count_nonzero(dim=-1).max().item()
+            # #
+            embedding_output, keep_indices = self.patch_prune(embedding_output, attn_mask_per_img, num_keep=num_keep)
+            attn_mask_per_img = attn_mask_per_img.gather(dim=-1, index=keep_indices)  # [B, num_keep]
         if attn_mask_per_img is not None:
             if self.use_soft_masks:
                 attn_mask = (
