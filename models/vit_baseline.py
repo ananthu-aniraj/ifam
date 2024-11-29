@@ -107,9 +107,6 @@ class BaselineViT(torch.nn.Module):
             x = self.blocks(x)
 
         x = self.norm(x)
-
-        # Classification head
-        x = self.fc_norm(x)
         if self.pooling_type == "cls":
             x = x[:, 0, :]
         elif self.pooling_type == "gap":
