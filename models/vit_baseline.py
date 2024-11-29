@@ -34,8 +34,6 @@ class BaselineViT(torch.nn.Module):
 
         self.pos_embed = init_model.pos_embed
         self.pos_drop = init_model.pos_drop
-        self.part_embed = nn.Identity()
-        self.patch_prune = nn.Identity()
         self.norm_pre = init_model.norm_pre
         self.blocks = init_model.blocks
         self.norm = init_model.norm
@@ -97,9 +95,6 @@ class BaselineViT(torch.nn.Module):
 
         # Position Embedding
         x = self._pos_embed(x)
-
-        x = self.part_embed(x)
-        x = self.patch_prune(x)
 
         # Forward pass through transformer
         x = self.norm_pre(x)
