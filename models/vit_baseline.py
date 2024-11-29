@@ -18,13 +18,11 @@ class BaselineViT(torch.nn.Module):
     - Option to use only class tokens or only patch tokens or both (concat) for classification
     """
 
-    def __init__(self, init_model: torch.nn.Module, num_classes: int,
-                 class_tokens_only: bool = False,
-                 patch_tokens_only: bool = False, return_transformer_qkv: bool = False) -> None:
+    def __init__(self, init_model: torch.nn.Module, num_classes: int, pooling_type: str,
+                 return_transformer_qkv: bool = False) -> None:
         super().__init__()
         self.num_classes = num_classes
-        self.class_tokens_only = class_tokens_only
-        self.patch_tokens_only = patch_tokens_only
+        self.pooling_type = pooling_type
         self.num_prefix_tokens = init_model.num_prefix_tokens
         self.num_reg_tokens = init_model.num_reg_tokens
         self.has_class_token = init_model.has_class_token
@@ -43,11 +41,12 @@ class BaselineViT(torch.nn.Module):
         self.norm = init_model.norm
 
         self.fc_norm = init_model.fc_norm
-        if class_tokens_only or patch_tokens_only:
+        if pooling_type == "cls" or pooling_type == "gap":
             self.head = nn.Linear(init_model.embed_dim, num_classes)
-        else:
+        elif pooling_type == "gap_cls":
             self.head = nn.Linear(init_model.embed_dim * 2, num_classes)
-
+        else:
+            raise ValueError("pooling_type must be one of 'cls', 'gap', 'gap_cls'")
         self.h_fmap = int(self.patch_embed.img_size[0] // self.patch_embed.patch_size[0])
         self.w_fmap = int(self.patch_embed.img_size[1] // self.patch_embed.patch_size[1])
 
@@ -89,7 +88,11 @@ class BaselineViT(torch.nn.Module):
             nn.init.constant_(self.head.bias, 0.)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
+        x = self.forward_features(x)
+        x = self.forward_head(x)
+        return x
 
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)
 
         # Position Embedding
@@ -112,17 +115,19 @@ class BaselineViT(torch.nn.Module):
 
         # Classification head
         x = self.fc_norm(x)
-        if self.class_tokens_only:  # only use class token
+        if self.pooling_type == "cls":
             x = x[:, 0, :]
-        elif self.patch_tokens_only:  # only use patch tokens
+        elif self.pooling_type == "gap":
             x = x[:, self.num_prefix_tokens:, :].mean(dim=1)
         else:
             x = torch.cat([x[:, 0, :], x[:, self.num_prefix_tokens:, :].mean(dim=1)], dim=1)
+        return x
+
+    def forward_head(self, x: torch.Tensor) -> torch.Tensor:
+        # Classification head
+        x = self.fc_norm(x)
         x = self.head(x)
-        if self.return_transformer_qkv:
-            return x, qkv
-        else:
-            return x
+        return x
 
     def get_specific_intermediate_layer(
             self,
