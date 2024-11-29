@@ -95,8 +95,7 @@ def parse_args():
                         help='Drop path rate (default: 0.0)')
     parser.add_argument('--output_stride', type=int, default=32, help='stride of the model')
     parser.add_argument('--freeze_backbone', default=False, action='store_true')
-    parser.add_argument('--class_token_only', default=False, action='store_true')
-    parser.add_argument('--patch_tokens_only', default=False, action='store_true')
+    parser.add_argument('--pooling_type', default="cls", type=str)
 
     # * Optimizer params
     parser.add_argument('--optimizer_type', default='adam', type=str)

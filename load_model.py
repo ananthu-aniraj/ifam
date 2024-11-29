@@ -175,8 +175,7 @@ def init_model_baseline(base_model, args, num_cls):
             torch.nn.init.constant_(base_model.fc.bias, 0.)
 
     if 'vit' in args.model_arch:
-        base_model = BaselineViT(base_model, num_classes=num_cls, class_tokens_only=args.class_token_only,
-                                 patch_tokens_only=args.patch_tokens_only)
+        base_model = BaselineViT(base_model, num_classes=num_cls, pooling_type=args.pooling_type)
     return base_model
 
 
