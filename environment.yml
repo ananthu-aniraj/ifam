@@ -1,4 +1,4 @@
-name: ananthu_venv
+name: engineer_venv
 channels:
   - xformers
   - pytorch
