@@ -77,7 +77,6 @@ class IndividualLandmarkViT2StageMod(torch.nn.Module):
                                                       bias=False)
         else:
             raise ValueError("classifier_type not implemented")
-        self.convert_blocks_and_attention()
         self._init_weights()
         if part_logits_threshold is not None:
             part_logits_threshold_tensor = torch.tensor([value for key, value in part_logits_threshold.items()])
