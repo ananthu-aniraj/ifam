@@ -16,6 +16,8 @@ The scaling is not implemented in the training script, so you will have to manua
 ### Recommended Batch Sizes 
 - For models trained on CUB/Waterbirds/SIIM-ACR, we recommend using a batch size of 16 (or higher per GPU - we trained with an overall batch size of 128 with 8 GPUs).
 - For models trained on MetaShifts, we recommend using a batch size of 32 (or higher per GPU - we trained with an overall batch size of 128 with 4 GPUs). 
+- In case these batch sizes do not fit in the GPU memory, you can use gradient accumulation to simulate a higher batch size. For example, if you have 1 GPU which can only fit a batch size of 16, you can set the `--gradient_accumulation_steps` parameter to 2 to simulate a batch size of 32. In this case, please use the learning rate corresponding to the batch size of 16.
+- Another option is to use mixed precision training. To use this, use the `--use_amp` flag in the training script. This will automatically use the `torch.cuda.amp` library for mixed precision training and should help in reducing the memory footprint.
 
 ## Experiment Tracking
 It is recommended to use [Weights and Biases](https://wandb.ai/site) for tracking the experiments. The `--wandb` flag can be used to enable this feature. Feel free to remove the `--wandb` flag if you don`t want to use it.

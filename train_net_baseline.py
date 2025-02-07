@@ -2,7 +2,7 @@ import torch
 from timeit import default_timer as timer
 
 from argument_parser_baseline_train import parse_args
-from load_dataset import get_dataset
+from load_dataset import load_train_test_datasets
 from load_model import load_model_baseline
 from load_losses import load_classification_loss
 from utils.data_utils.transform_utils import load_transforms
@@ -26,7 +26,7 @@ def baseline_train_eval():
 
     # Get the transforms and load the dataset
     train_transforms, test_transforms = load_transforms(args)
-    dataset_train, dataset_test, num_cls = get_dataset(args, train_transforms, test_transforms)
+    dataset_train, dataset_test, num_cls = load_train_test_datasets(args, train_transforms, test_transforms)
 
     # Load the model
     model = load_model_baseline(args, num_cls)
@@ -44,6 +44,11 @@ def baseline_train_eval():
     param_groups = layer_group_matcher_baseline(args, model)
     optimizer = build_optimizer(args, param_groups, dataset_train)
     scheduler = build_scheduler(args, optimizer)
+
+    # Load averaging parameters
+    averaging_params = {'type': args.averaging_type, 'decay': args.model_ema_decay,
+                        'use_warmup': not args.no_model_ema_warmup,
+                        'device': 'cpu' if args.model_ema_force_cpu else None}
 
     # Start the timer
     start_time = timer()
@@ -68,6 +73,8 @@ def baseline_train_eval():
                             seed=args.seed,
                             eval_only=args.eval_only,
                             use_ddp=use_ddp,
+                            grad_accumulation_steps=args.grad_accumulation_steps,
+                            averaging_params=averaging_params,
                             )
 
     # End the timer and print out how long it took

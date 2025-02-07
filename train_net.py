@@ -9,7 +9,7 @@ from utils.misc_utils import sync_bn_conversion, check_snapshot
 from utils.training_utils.ddp_utils import multi_gpu_check
 from utils.wandb_params import get_train_loggers
 from engine.distributed_trainer_two_stage import launch_pdisco_2_stage_trainer
-from load_dataset import get_dataset
+from load_dataset import load_train_test_datasets
 from load_model import load_model_2_stage
 from load_losses import load_classification_loss, load_loss_hyper_params
 
@@ -28,7 +28,7 @@ def pdisco_train_eval():
     train_transforms, test_transforms = load_transforms(args)
 
     # Load the dataset
-    dataset_train, dataset_test, num_cls = get_dataset(args, train_transforms, test_transforms)
+    dataset_train, dataset_test, num_cls = load_train_test_datasets(args, train_transforms, test_transforms)
 
     # Load the model
     model = load_model_2_stage(args, num_cls)
@@ -51,6 +51,11 @@ def pdisco_train_eval():
     scheduler = build_scheduler(args, optimizer)
     # Start the timer
     start_time = timer()
+
+    # Load averaging parameters
+    averaging_params = {'type': args.averaging_type, 'decay': args.model_ema_decay,
+                        'use_warmup': not args.no_model_ema_warmup,
+                        'device': 'cpu' if args.model_ema_force_cpu else None}
 
     # Setup training and save the results
     launch_pdisco_2_stage_trainer(model=model,
@@ -77,6 +82,8 @@ def pdisco_train_eval():
                                   sub_path_test=args.image_sub_path_test,
                                   dataset_name=args.dataset,
                                   amap_saving_prob=args.amap_saving_prob,
+                                  grad_accumulation_steps=args.grad_accumulation_steps,
+                                  averaging_params=averaging_params,
                                   )
 
     # End the timer and print out how long it took

@@ -4,7 +4,8 @@ import timm
 from timm.models import create_model
 from torchvision.models import get_model
 from models import BaselineViT, \
-    FullTwoStageModelDoubleClassify, FullTwoStageModelDoubleClassifyHF, BaselineDInoV2HF
+    FullTwoStageModelDoubleClassify, FullTwoStageModelDoubleClassifyHF, BaselineDInoV2HF, LateMaskViT, \
+    AttnMaskViTDecoupled
 from models.selfpatch_vision_transformer import vit_small_sp, load_pretrained_weights_sp
 from utils import load_json
 
@@ -291,3 +292,30 @@ def load_model_2_stage_hf(args, num_cls, part_logits_threshold):
                                               use_soft_masks=args.use_soft_masks,
                                               part_logits_threshold=part_logits_threshold)
     return model
+
+
+def load_model_mask_vit(args, num_cls):
+    """
+    Function to load the baseline model
+    :param args: Arguments from the command line
+    :param num_cls: Number of classes in the dataset
+    :return:
+    """
+    base_model = load_model_arch(args, num_cls)
+    model = init_model_mask_vit(base_model, args, num_cls)
+    return model
+
+
+def init_model_mask_vit(base_model, args, num_cls):
+    """
+    Function to initialize the masked vit model
+    :param base_model: Model loaded from the timm/torchvision library
+    :param args: Arguments from the command line
+    :param num_cls: Number of classes in the dataset
+    :return:
+    """
+    if args.late_masking:
+        base_model = LateMaskViT(base_model, num_classes=num_cls)
+    else:
+        base_model = AttnMaskViTDecoupled(base_model, num_classes=num_cls)
+    return base_model

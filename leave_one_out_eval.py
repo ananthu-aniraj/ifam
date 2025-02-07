@@ -8,7 +8,7 @@ from utils.misc_utils import sync_bn_conversion, check_snapshot
 from utils.training_utils.ddp_utils import multi_gpu_check
 from utils.wandb_params import get_train_loggers
 from engine.distributed_trainer_two_stage import launch_pdisco_2_stage_trainer
-from load_dataset import get_dataset
+from load_dataset import load_train_test_datasets
 from load_model import load_model_2_stage
 from load_losses import load_classification_loss, load_loss_hyper_params
 
@@ -27,7 +27,7 @@ def leave_one_out_eval():
     train_transforms, test_transforms = load_transforms(args)
 
     # Load the dataset
-    dataset_train, dataset_test, num_cls = get_dataset(args, train_transforms, test_transforms)
+    dataset_train, dataset_test, num_cls = load_train_test_datasets(args, train_transforms, test_transforms)
 
     # Load the model
     model = load_model_2_stage(args, num_cls)

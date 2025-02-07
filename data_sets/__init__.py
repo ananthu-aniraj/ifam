@@ -4,3 +4,8 @@ from .flowers102seg import *
 from .cxr import *
 from .waterbirds_dataset import *
 from .cub_dataset_seg import *
+from .waterbirds_dataset_seg import *
+from .metashifts_dataset_seg import *
+from .turtle_reid import *
+from .imagenet_v2 import *
+from .imagenet_ood_eval import *

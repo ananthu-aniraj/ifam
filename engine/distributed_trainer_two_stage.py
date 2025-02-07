@@ -5,21 +5,27 @@ from typing import Dict, List, Any
 
 import fsspec
 import numpy as np
-import torch
+import torchmetrics
 from timm.data import Mixup
 from torch.distributed import destroy_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-import torchmetrics
 
-from utils.training_utils.snapshot_class import Snapshot
+from timm.utils.model_ema import ModelEmaV3
+
+from losses import *
 from utils.data_utils.reversible_affine_transform import generate_affine_trans_params
 from utils.training_utils.ddp_utils import ddp_setup, set_seeds
-from utils.visualize_att_maps import VisualizeAttentionMaps
 from utils.training_utils.engine_utils import load_state_dict_snapshot, AverageMeter
+from utils.training_utils.snapshot_class import Snapshot
+from utils.visualize_att_maps import VisualizeAttentionMaps
 from utils.wandb_params import init_wandb
-from losses import *
+
+amp_dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported(
+    including_emulation=False) else 'float16'  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+# note: float16 data type will automatically use a GradScaler
+pt_dtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[amp_dtype]
 
 
 class PDiscoTrainerTwoStage:
@@ -48,21 +54,29 @@ class PDiscoTrainerTwoStage:
             sub_path_test: str = "",
             dataset_name: str = "",
             amap_saving_prob: float = 0.05,
+            grad_accumulation_steps: int = 1,
+            averaging_params: Optional[Dict] = None,
     ) -> None:
         self._init_ddp(use_ddp)
         self.num_landmarks = model.num_landmarks
-        self.num_classes = model.num_classes
+        if dataset_name == "imagenet_a" or dataset_name == "imagenet_r":
+            self.num_classes = train_dataset.num_classes
+        else:
+            self.num_classes = model.num_classes
+
         # Top-k accuracy metrics for evaluation
         self._init_accuracy_metrics()
         self.model = model.to(self.local_rank)
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
-        self.name_dataset = dataset_name
+        self.dataset_name = dataset_name
         self.sub_path_test = sub_path_test
         self.batch_size = batch_size
         self.eval_only = eval_only
-        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers, shuffle=True, drop_last=True)
-        self.test_loader = self._prepare_dataloader(test_dataset, num_workers=num_workers, drop_last=False, shuffle=False)
+        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers, shuffle=True,
+                                                     drop_last=True)
+        self.test_loader = self._prepare_dataloader(test_dataset, num_workers=num_workers, drop_last=False,
+                                                    shuffle=False)
         if len(loss_fn) == 1:
             self.loss_fn_train = self.loss_fn_eval = loss_fn[0]
             self.loss_fn_stage_1_train = loss_fn[0]
@@ -88,13 +102,12 @@ class PDiscoTrainerTwoStage:
         self.log_freq = log_freq
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.use_amp = use_amp
         self.grad_norm_clip = grad_norm_clip
         self.max_epochs = max_epochs
         self.mixup_fn = mixup_fn
         self.epoch_test_accuracies = []
         self.current_epoch = 0
-        self.accum_steps = 1
+        self.accum_steps = grad_accumulation_steps
 
         # Equivariance affine transform parameters
         self._init_affine_transform_params(eq_affine_transform_params)
@@ -105,8 +118,21 @@ class PDiscoTrainerTwoStage:
         # Loss dictionary
         self._init_loss_dict()
 
+        # Find Pytorch data type
         if use_amp:
-            self.scaler = torch.cuda.amp.GradScaler()
+            self.pt_dtype = pt_dtype
+            self.amp_dtype = amp_dtype
+        else:
+            self.amp_dtype = 'float32'
+            self.pt_dtype = torch.float32
+
+        # Initialize the GradScaler
+        try:
+            self.scaler = torch.GradScaler(device="cuda", enabled=(self.amp_dtype == 'float16'))
+        except AttributeError:
+            self.scaler = torch.cuda.amp.GradScaler(enabled=(self.amp_dtype == 'float16'))
+
+        self.averaging_params = averaging_params
 
         if os.path.isfile(os.path.join(snapshot_path, f"snapshot_best.pt")):
             print("Loading snapshot")
@@ -119,8 +145,14 @@ class PDiscoTrainerTwoStage:
         self.batch_img_metas = None
         # Initialize the visualization class
         self.vis_att_maps = VisualizeAttentionMaps(snapshot_dir=self.snapshot_path, sub_path_test=self.sub_path_test,
-                                                   dataset_name=self.name_dataset, bg_label=self.num_landmarks,
+                                                   dataset_name=self.dataset_name, bg_label=self.num_landmarks,
                                                    batch_size=self.batch_size, num_parts=self.num_landmarks + 1)
+
+        self.model_ema = None
+        self.averaging_type = averaging_params['type']
+        if self.averaging_type == "ema":
+            self.model_ema = ModelEmaV3(model, decay=averaging_params['decay'], device=averaging_params['device'],
+                                        use_warmup=averaging_params['use_warmup'])
         if self.use_ddp:
             if self.local_rank == 0 and self.global_rank == 0:
                 print(f"Using {self.world_size} GPUs, Broadcast Buffers")
@@ -348,7 +380,7 @@ class PDiscoTrainerTwoStage:
             shuffle=False,
             num_workers=num_workers,
             drop_last=True,
-            sampler=DistributedSampler(dataset)
+            sampler=DistributedSampler(dataset),
         )
 
     def _prepare_dataloader(self, dataset: torch.utils.data.Dataset, num_workers: int = 4,
@@ -392,10 +424,17 @@ class PDiscoTrainerTwoStage:
     def _run_batch(self, source, targets, train: bool = True, vis_att_maps: bool = False, curr_iter: int = 0,
                    part_ids_to_remove: List[int] = None) -> \
             Tuple[Any, Any]:
-        with torch.set_grad_enabled(train), torch.amp.autocast(device_type="cuda", dtype=torch.float16,
-                                                               enabled=self.use_amp):
-            outputs, maps_combined, maps_fg_bg_combined, all_features, outputs_stage_1, _ = self.model(source,
-                                                                                                       part_ids_to_remove)
+        if train and self.use_ddp:
+            self.model.require_backward_grad_sync = (
+                    (curr_iter + 1) % self.accum_steps == 0 or curr_iter == len(self.train_loader) - 1)
+        with torch.set_grad_enabled(train), torch.amp.autocast(device_type="cuda", dtype=self.pt_dtype):
+            # Use ema model for evaluation (if available)
+            if not train and self.model_ema is not None and self.averaging_params['device'] != "cpu":
+                outputs, maps_combined, maps_fg_bg_combined, all_features, outputs_stage_1, _ = self.model_ema(source,
+                                                                                                               part_ids_to_remove)
+            else:
+                outputs, maps_combined, maps_fg_bg_combined, all_features, outputs_stage_1, _ = self.model(source,
+                                                                                                           part_ids_to_remove)
             outputs_stage_1 = outputs_stage_1.mean(dim=-1)  # B x num_classes
             maps_fg_bg, maps_fg_bg_soft = maps_fg_bg_combined
             maps = maps_combined
@@ -449,36 +488,37 @@ class PDiscoTrainerTwoStage:
                 loss += loss_orth
                 loss += loss_pixel_wise_entropy
                 loss += loss_classification_stage_1
-                self.optimizer.zero_grad(set_to_none=True)
-                if self.use_amp:
-                    self.scaler.scale(loss).backward()
-                    if self.grad_norm_clip:
-                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm_clip)
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                else:
-                    loss.backward()
-                    if self.grad_norm_clip:
-                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm_clip)
-                    self.optimizer.step()
+                loss /= self.accum_steps
 
-                losses_dict = {'loss_classification_train': loss_classification.item(),
-                               'loss_conc_train': loss_conc.item(),
-                               'loss_presence_train': loss_presence.item(),
-                               'loss_orth_train': loss_orth.item(),
-                               'loss_equiv_train': loss_equiv.item(),
-                               'loss_total_train': loss.item(), 'loss_tv': loss_tv.item(),
-                               'loss_enforced_presence': loss_enforced_presence.item(),
-                               'loss_pixel_wise_entropy': loss_pixel_wise_entropy.item(),
-                               'loss_classification_stage_1': loss_classification_stage_1.item()}
             else:
                 loss = self.loss_fn_eval(outputs, targets)
-                loss = loss + self.loss_fn_stage_1_test(outputs_stage_1, targets)
-                losses_dict = {'loss_total_val': loss.item()}
-                if vis_att_maps:
-                    if np.random.random() < self.amap_saving_prob:
-                        self.vis_att_maps.show_maps(ims=source, maps=maps, epoch=self.current_epoch,
-                                                    curr_iter=curr_iter)
+                loss += self.loss_fn_stage_1_test(outputs_stage_1, targets)
+
+        if train:
+            self.scaler.scale(loss).backward()
+            if (curr_iter + 1) % self.accum_steps == 0 or curr_iter == len(self.train_loader) - 1:
+                if self.grad_norm_clip:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm_clip)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                self.optimizer.zero_grad(set_to_none=True)
+
+            losses_dict = {'loss_classification_train': loss_classification.item(),
+                           'loss_conc_train': loss_conc.item(),
+                           'loss_presence_train': loss_presence.item(),
+                           'loss_orth_train': loss_orth.item(),
+                           'loss_equiv_train': loss_equiv.item(),
+                           'loss_total_train': loss.item(), 'loss_tv': loss_tv.item(),
+                           'loss_enforced_presence': loss_enforced_presence.item(),
+                           'loss_pixel_wise_entropy': loss_pixel_wise_entropy.item(),
+                           'loss_classification_stage_1': loss_classification_stage_1.item()}
+        else:
+            losses_dict = {'loss_total_val': loss.item()}
+            if vis_att_maps:
+                if np.random.random() < self.amap_saving_prob:
+                    self.vis_att_maps.show_maps(ims=source, maps=maps, epoch=self.current_epoch,
+                                                curr_iter=curr_iter)
         return outputs, losses_dict, outputs_stage_1
 
     def _run_epoch(self, epoch: int, dataloader: DataLoader, train: bool = True, part_ids_to_remove: List[int] = None):
@@ -499,10 +539,9 @@ class PDiscoTrainerTwoStage:
             dataloader.sampler.set_epoch(epoch)
 
         last_accum_steps = len(dataloader) % self.accum_steps
-        updates_per_epoch = (len(dataloader) + self.accum_steps - 1) // self.accum_steps
+        updates_per_epoch = len(dataloader) // self.accum_steps + (1 if last_accum_steps > 0 else 0)
         num_updates = (epoch - 1) * updates_per_epoch
         last_batch_idx = len(dataloader) - 1
-        last_batch_idx_to_accum = len(dataloader) - last_accum_steps
 
         vis_att_maps = True if epoch % self.save_every == 0 else False
         vis_att_maps = True if epoch == self.max_epochs else vis_att_maps
@@ -553,6 +592,9 @@ class PDiscoTrainerTwoStage:
                                                                             vis_att_maps=vis_att_maps, curr_iter=it,
                                                                             part_ids_to_remove=part_ids_to_remove)
 
+            if self.dataset_name == "imagenet_a" or self.dataset_name == "imagenet_r":
+                batch_preds = batch_preds[:, self.test_dataset.class_mask]
+                batch_preds_stage_1 = batch_preds_stage_1[:, self.test_dataset.class_mask]
             if train:
                 for key in losses_dict.keys():
                     self.loss_dict_train[key].update(losses_dict[key], source.size(0))
@@ -575,8 +617,11 @@ class PDiscoTrainerTwoStage:
                         self.auroc_train['auroc_train_stage_1'].update(batch_preds_stage_1, targets.long())
                         self.auroc_train['auroc_train'].update(batch_preds, targets.long())
 
-                num_updates += 1
-                self.scheduler.step_update(num_updates=num_updates)
+                if (it + 1) % self.accum_steps == 0 or it == last_batch_idx:
+                    num_updates += 1
+                    self.scheduler.step_update(num_updates=num_updates)
+                    if self.model_ema is not None:
+                        self.model_ema.update(self.model, step=num_updates)
             else:
                 for key in losses_dict.keys():
                     self.loss_dict_val[key].update(losses_dict[key], source.size(0))
@@ -650,8 +695,10 @@ class PDiscoTrainerTwoStage:
         return losses_dict, accuracies_dict, accuracies_dict_per_class
 
     def _save_snapshot(self, epoch, save_best: bool = False):
-        # capture snapshot
-        model = self.model
+        if self.model_ema is not None:
+            model = self.model_ema.module
+        else:
+            model = self.model
         raw_model = model.module if hasattr(model, "module") else model
         snapshot = Snapshot(
             model_state=raw_model.state_dict(),
@@ -773,6 +820,8 @@ def launch_pdisco_2_stage_trainer(model: torch.nn.Module,
                                   dataset_name: str = "",
                                   amap_saving_prob: float = 0.05,
                                   part_ids_to_remove: List[int] = None,
+                                  grad_accumulation_steps: int = 1,
+                                  averaging_params: Optional[Dict] = None,
                                   ) -> None:
     """Trains and tests a PyTorch model.
 
@@ -825,7 +874,9 @@ def launch_pdisco_2_stage_trainer(model: torch.nn.Module,
                                           mixup_fn=mixup_fn, eval_only=eval_only, loss_hyperparams=loss_hyperparams,
                                           eq_affine_transform_params=eq_affine_transform_params, use_ddp=use_ddp,
                                           sub_path_test=sub_path_test, dataset_name=dataset_name,
-                                          amap_saving_prob=amap_saving_prob)
+                                          amap_saving_prob=amap_saving_prob,
+                                          grad_accumulation_steps=grad_accumulation_steps,
+                                          averaging_params=averaging_params)
     if eval_only:
         model_trainer.test_only(part_ids_to_remove=part_ids_to_remove)
     else:

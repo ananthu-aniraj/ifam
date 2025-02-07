@@ -130,14 +130,46 @@ def load_train_transforms_siim_acr(args):
 
 def load_transforms(args):
     # Get the transforms and load the dataset
+    if args.dataset.lower().startswith('imagenet'):
+        if args.augmentations_to_use == 'timm':
+            train_transforms = build_transform_timm(args, is_train=True)
+        else:
+            # Default ImageNet transforms from torchvision
+            train_transforms = transforms.Compose([
+                transforms.RandomResizedCrop(args.image_size),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
+            ])
+        test_transforms = build_transform_timm(args, is_train=False)
+        return train_transforms, test_transforms
+    if args.dataset == 'siim_acr':
+        train_transforms, test_transforms = load_train_transforms_siim_acr(args)
+        return train_transforms, test_transforms
     if args.augmentations_to_use == 'timm':
         train_transforms = build_transform_timm(args, is_train=True)
     elif args.augmentations_to_use == 'cub_original':
         train_transforms = make_train_transforms(args)
-    elif args.augmentations_to_use == 'siim_acr':
-        train_transforms, test_transforms = load_train_transforms_siim_acr(args)
-        return train_transforms, test_transforms
     else:
         raise ValueError('Augmentations not supported.')
     test_transforms = make_test_transforms(args)
+    return train_transforms, test_transforms
+
+
+def load_transforms_seg(args):
+    train_transforms = A.Compose([
+        A.SmallestMaxSize(max_size=args.image_size),
+        A.CropNonEmptyMaskIfExists(p=1, height=args.image_size, width=args.image_size),
+        A.HorizontalFlip(p=0.5),
+        A.ColorJitter(p=0.5),
+        A.PlanckianJitter(p=0.5, mode="blackbody"),
+        A.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+        ToTensorV2()
+    ])
+    test_transforms = A.Compose([
+        A.SmallestMaxSize(max_size=args.image_size),
+        A.CropNonEmptyMaskIfExists(p=1, height=args.image_size, width=args.image_size),
+        A.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD),
+        ToTensorV2()
+    ])
     return train_transforms, test_transforms

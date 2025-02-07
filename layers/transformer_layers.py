@@ -43,7 +43,7 @@ class BlockWQKVReturn(Block):
         - Return the qkv tensors from the attention
     """
 
-    def forward(self, x: torch.Tensor, return_qkv: bool = False) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor, return_qkv: bool = False):
         # Note: this is copied from timm.models.vision_transformer.Block with modifications.
         x_attn, qkv = self.attn(self.norm1(x))
         x = x + self.drop_path1(self.ls1(x_attn))

@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from data_sets import FineGrainedBirdClassificationDataset, WaterBirdsDataset, CXRDataset
@@ -8,12 +9,16 @@ from tqdm import tqdm
 import copy
 import os
 from pathlib import Path
+import matplotlib
+
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from utils.training_utils.engine_utils import load_state_dict_snapshot
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from utils import factors, save_json
+from load_dataset import load_single_split
 
 # fix all the randomness for reproducibility
 torch.backends.cudnn.enabled = True
@@ -31,7 +36,12 @@ def parse_args():
     parser.add_argument('--data_path',
                         help='directory that contains cub files, must'
                              'contain folder "./images"', required=True)
+    parser.add_argument('--image_sub_path', default='images', type=str)
     parser.add_argument('--dataset', default='cub', type=str)
+    parser.add_argument('--dataset_split', default='train', type=str)
+    parser.add_argument('--mask_sub_path', default='all_masks', type=str, required=False)
+    parser.add_argument('--split_type', default="split_closed", type=str, help='split of the dataset to use')
+
     # Model params
     parser.add_argument('--num_parts', help='number of parts to predict',
                         default=8, type=int)
@@ -58,52 +68,36 @@ def parse_args():
     # Path to save the results
     parser.add_argument('--save_path', type=str)
     parser.add_argument('--save_histograms', default=False, action='store_true')
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
-def calc_part_logits(arguments):
-    arguments.eval_only = True
-    arguments.pretrained_start_weights = True
-    height = arguments.image_size
-    Path(arguments.save_path).mkdir(parents=True, exist_ok=True)
-    test_transforms = transforms.Compose([
-        transforms.Resize(size=height),
-        transforms.CenterCrop(size=height),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
-    ])
-    # define dataset path
-    if arguments.dataset == 'cub':
-        cub_path = arguments.data_path
-        # define dataset and loader
-        eval_data = FineGrainedBirdClassificationDataset(cub_path, split=1, transform=test_transforms, mode='train')
-        num_cls = eval_data.num_classes
-    elif arguments.dataset == 'waterbirds':
-        eval_data = WaterBirdsDataset(arguments.data_path, mode='train',
-                                      transform=test_transforms)
-        num_cls = eval_data.num_classes
-    elif arguments.dataset == 'meta_shift':
-        eval_data = datasets.ImageFolder(os.path.join(arguments.data_path, 'train'), test_transforms)
-        num_cls = len(eval_data.classes)
-        eval_data.num_classes = num_cls
-    elif arguments.dataset == 'siim_acr':
+def calc_part_logits(args):
+    args.eval_only = True
+    args.pretrained_start_weights = True
+    args.stage_1_weights_path = None
+    height = args.image_size
+    Path(args.save_path).mkdir(parents=True, exist_ok=True)
+    if args.dataset == 'siim_acr':
         cxr_mean = (0.48865, 0.48865, 0.48865)
         cxr_std = (0.24621, 0.24621, 0.24621)
-        test_transforms: A.Compose = A.Compose([
+        image_transforms: A.Compose = A.Compose([
             A.ToRGB(always_apply=True),
-            A.Resize(arguments.image_size, arguments.image_size),
+            A.Resize(args.image_size, args.image_size),
             A.Normalize(mean=cxr_mean, std=cxr_std),
             ToTensorV2()
         ])
-        eval_data = CXRDataset(arguments.data_path, image_sub_path='train_set',
-                               mask_sub_path='all_masks', transform=test_transforms)
-        num_cls = eval_data.num_classes
     else:
-        raise ValueError('Dataset not supported.')
+        image_transforms = transforms.Compose([
+            transforms.Resize(size=height),
+            transforms.CenterCrop(size=height),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD)
+        ])
+    # Load the dataset
+    eval_data, num_cls = load_single_split(args, image_transforms, split=args.dataset_split, image_sub_path=args.image_sub_path)
     # Load the model
-    model = load_model_2_stage(arguments, num_cls)
-    snapshot_data = torch.load(arguments.model_path, map_location=torch.device('cpu'), weights_only=True)
+    model = load_model_2_stage(args, num_cls)
+    snapshot_data = torch.load(args.model_path, map_location=torch.device('cpu'), weights_only=True)
     if 'model_state' in snapshot_data:
         _, state_dict = load_state_dict_snapshot(snapshot_data)
     else:
@@ -113,8 +107,8 @@ def calc_part_logits(arguments):
     model = model.eval().to(device)
     dataloader = torch.utils.data.DataLoader(
         eval_data,
-        batch_size=arguments.batch_size, shuffle=False,
-        num_workers=arguments.num_workers, pin_memory=True, drop_last=False)
+        batch_size=args.batch_size, shuffle=False,
+        num_workers=args.num_workers, pin_memory=True, drop_last=False)
 
     # Calculate the part logits
     part_logits_train = []
@@ -124,12 +118,13 @@ def calc_part_logits(arguments):
         images = images.to(device)
 
         with torch.no_grad():
-            all_features_mod, attn_maps_combined, maps_fg_bg, predictions, part_logits = model.stage_1(images)
+            pred_stage_2, attn_maps_combined, attn_maps_fg_bg_combined, all_features_mod, pred_stage_1, part_logits = model(
+                images)
             part_logits_train.append(part_logits)
             attn_maps_combined_train.append(attn_maps_combined)
 
-    part_logits_train = torch.cat(part_logits_train, dim=0)
-    attn_maps_combined_train = torch.cat(attn_maps_combined_train, dim=0)
+    part_logits_train = torch.cat(part_logits_train, dim=0).cpu()
+    attn_maps_combined_train = torch.cat(attn_maps_combined_train, dim=0).cpu()
     part_assignments = torch.argmax(attn_maps_combined_train, dim=1)  # get the part assignments
     part_logits_full_matched = {}
     for idx, (logits, assignment) in enumerate(zip(part_logits_train, part_assignments)):
@@ -151,31 +146,31 @@ def calc_part_logits(arguments):
     for key in part_logits_full_unmatched.keys():
         part_logits_full_unmatched[key] = torch.cat(part_logits_full_unmatched[key], dim=0)
 
-    if arguments.save_histograms:
-        n_rows = factors(arguments.num_parts + 1)[-1]
-        n_cols = factors(arguments.num_parts + 1)[-2]
+    if args.save_histograms:
+        n_rows = factors(args.num_parts)[-1]
+        n_cols = factors(args.num_parts)[-2]
         # Combine the histograms
         plt.figure(figsize=(20, 20))
-        for idx, key in enumerate(part_logits_full_unmatched.keys()):
+        for idx in range(args.num_parts):
             plt.subplot(n_rows, n_cols, idx + 1)
-            plt.hist(part_logits_full_unmatched[key].cpu(), alpha=0.5, label=f"Part {key} - Unmatched", density=True)
-            plt.hist(part_logits_full_matched[key].cpu(), alpha=0.5, label=f"Part {key} - Matched", density=True)
+            plt.hist(part_logits_full_unmatched[idx], alpha=0.5, label=f"Part {idx} - Unmatched", density=True)
+            plt.hist(part_logits_full_matched[idx], alpha=0.5, label=f"Part {idx} - Matched", density=True)
             plt.legend()
-            plt.title(f"Part {key}")
-        plt.savefig(os.path.join(arguments.save_path, "part_logits_histogram.png"))
+            plt.title(f"Part {idx}")
+        plt.savefig(os.path.join(args.save_path, "part_logits_histogram.png"))
+        plt.close()
 
     # Use the 5th percentile as the threshold
     for quantile in [0.01, 0.03, 0.05, 0.1]:
         thresholds = {}
         for key in part_logits_full_matched.keys():
-            thresholds[key] = torch.quantile(part_logits_full_matched[key], quantile).item()
+            thresholds[key] = np.quantile(part_logits_full_matched[key].numpy(), quantile).item()
         # Remove threshold for bg (last part)
-        thresholds.pop(arguments.num_parts)
+        thresholds.pop(args.num_parts)
         print(f"Quantile: {1 - quantile}")
         print(thresholds)
-        save_json(thresholds, os.path.join(arguments.save_path, f"{1 - quantile}.json"))
+        save_json(thresholds, os.path.join(args.save_path, f"{1 - quantile}.json"))
 
 
 if __name__ == '__main__':
-    args = parse_args()
-    calc_part_logits(args)
+    calc_part_logits(parse_args())

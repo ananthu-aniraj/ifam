@@ -6,6 +6,7 @@ import copy
 
 import torch
 import torchmetrics
+from torchmetrics.classification import MultilabelAccuracy, MultilabelAveragePrecision, MultilabelAUROC
 from torch.distributed import destroy_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
@@ -19,12 +20,13 @@ from utils.wandb_params import init_wandb
 from utils.training_utils.ddp_utils import ddp_setup, set_seeds
 from utils.training_utils.engine_utils import AverageMeter
 
-amp_dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported(including_emulation=False) else 'float16'  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+amp_dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported(
+    including_emulation=False) else 'float16'  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 # note: float16 data type will automatically use a GradScaler
 pt_dtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[amp_dtype]
 
 
-class BaselineTrainer:
+class MaskedViTTrainer:
     def __init__(
             self,
             model: torch.nn.Module,
@@ -46,19 +48,27 @@ class BaselineTrainer:
             eval_only: bool = False,
             use_ddp: bool = False,
             grad_accumulation_steps: int = 1,
+            dataset_name: str = "",
             averaging_params: Optional[Dict] = None,
     ) -> None:
         self._init_ddp(use_ddp)
-        self.num_classes = model.num_classes
+        if dataset_name == "imagenet_a" or dataset_name == "imagenet_r":
+            self.num_classes = train_dataset.num_classes
+        else:
+            self.num_classes = model.num_classes
         # Top-k accuracy metrics for evaluation
         self._init_accuracy_metrics()
+        self.dataset_name = dataset_name
         self._init_loss_dict()
+        self.h_fmap = model.h_fmap
+        self.w_fmap = model.w_fmap
         self.model = model.to(self.local_rank)
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
         self.batch_size = batch_size
         self.eval_only = eval_only
-        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers, drop_last=True, shuffle=True)
+        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers, drop_last=True,
+                                                     shuffle=True)
         self.test_loader = self._prepare_dataloader(test_dataset, num_workers=num_workers, drop_last=False)
         if len(loss_fn) == 1:
             self.loss_fn_train = self.loss_fn_eval = loss_fn[0]
@@ -101,6 +111,8 @@ class BaselineTrainer:
         except AttributeError:
             self.scaler = torch.cuda.amp.GradScaler(enabled=(self.amp_dtype == 'float16'))
 
+        self.averaging_params = averaging_params
+
         if os.path.isfile(os.path.join(snapshot_path, f"snapshot_best.pt")):
             print("Loading snapshot")
             self._load_snapshot()
@@ -108,12 +120,13 @@ class BaselineTrainer:
             print("Loading snapshot")
             self._load_snapshot()
         self.batch_img_metas = None
+
         self.model_ema = None
         self.averaging_type = averaging_params['type']
-        self.averaging_params = averaging_params
         if self.averaging_type == "ema":
             self.model_ema = ModelEmaV3(model, decay=averaging_params['decay'], device=averaging_params['device'],
                                         use_warmup=averaging_params['use_warmup'])
+
         if self.use_ddp:
             print(f"Using DDP with {self.world_size} GPUs")
             self.model = DDP(self.model, device_ids=[self.local_rank])
@@ -232,7 +245,7 @@ class BaselineTrainer:
             shuffle=False,
             num_workers=num_workers,
             drop_last=True,
-            sampler=DistributedSampler(dataset)
+            sampler=DistributedSampler(dataset),
         )
 
     def _prepare_dataloader(self, dataset: torch.utils.data.Dataset, num_workers: int = 4,
@@ -263,11 +276,7 @@ class BaselineTrainer:
             return
 
         snapshot = Snapshot(**snapshot_data)
-        relevant_keys = [key for key in snapshot.model_state.keys() if "base_model" in key]
-        if relevant_keys:
-            state_dict = {key.replace('base_model.module.', ''): snapshot.model_state[key] for key in relevant_keys}
-        else:
-            state_dict = snapshot.model_state
+        state_dict = snapshot.model_state
         self.model.load_state_dict(state_dict)
         if self.eval_only:
             return
@@ -278,19 +287,24 @@ class BaselineTrainer:
             self.epoch_test_accuracies = copy.deepcopy(snapshot.epoch_test_accuracies)
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
-    def _run_batch(self, source, targets, train: bool = True, curr_iter: int = 0) -> Tuple[Any, Any]:
-        # Speed up gradient accumulation by only syncing between GPUs every accum_steps
+    def _run_batch(self, source, targets, inp_mask, train: bool = True, curr_iter: int = 0) -> Tuple[Any, Any]:
         if train and self.use_ddp:
             self.model.require_backward_grad_sync = (
-                        (curr_iter + 1) % self.accum_steps == 0 or curr_iter == len(self.train_loader) - 1)
+                    (curr_iter + 1) % self.accum_steps == 0 or curr_iter == len(self.train_loader) - 1)
 
         with torch.set_grad_enabled(train), torch.amp.autocast(device_type="cuda", dtype=self.pt_dtype):
+            # Reshape the input mask to match the output of the model
+            downsampled_mask = torch.nn.functional.interpolate(inp_mask.unsqueeze(1).float(),
+                                                               size=(self.h_fmap, self.w_fmap),
+                                                               mode='nearest-exact').squeeze(
+                1).contiguous()  # (B, H, W)
+            downsampled_mask = downsampled_mask.flatten(1)  # (B, H*W)
 
             # Use ema model for evaluation (if available)
             if not train and self.model_ema is not None and self.averaging_params['device'] != "cpu":
-                outputs = self.model_ema(source)
+                outputs = self.model_ema(source, downsampled_mask)
             else:
-                outputs = self.model(source)
+                outputs = self.model(source, downsampled_mask)
 
             if train:
                 loss = self.loss_fn_train(outputs, targets)
@@ -300,7 +314,6 @@ class BaselineTrainer:
 
         if train:
             self.scaler.scale(loss).backward()
-
             if (curr_iter + 1) % self.accum_steps == 0 or curr_iter == len(self.train_loader) - 1:
                 if self.grad_norm_clip:
                     self.scaler.unscale_(self.optimizer)
@@ -326,31 +339,37 @@ class BaselineTrainer:
             self.loss_dict_val[key].reset()
         accuracies_dict = {}
         accuracies_dict_per_class = {}
-        # Compute metrics for evaluation
-        for key in self.acc_dict_train.keys():
-            self.acc_dict_train[key].reset()
-        for key in self.acc_dict_test.keys():
-            self.acc_dict_test[key].reset()
         for key in self.per_class_acc_train.keys():
             self.per_class_acc_train[key].reset()
         for key in self.per_class_acc_test.keys():
             self.per_class_acc_test[key].reset()
-
         for key in self.auroc_train.keys():
             self.auroc_train[key].reset()
         for key in self.auroc_test.keys():
             self.auroc_test[key].reset()
 
+        # Compute metrics for evaluation
+        for key in self.acc_dict_train.keys():
+            self.acc_dict_train[key].reset()
+        for key in self.acc_dict_test.keys():
+            self.acc_dict_test[key].reset()
+
         for it, mini_batch in enumerate(dataloader):
             source = mini_batch[0]
             targets = mini_batch[1]
+            inp_mask = mini_batch[2]
             step_type = "Train" if train else "Eval"
             source = source.to(self.local_rank, non_blocking=True)
             targets = targets.to(self.local_rank, non_blocking=True)
+            inp_mask = inp_mask.to(self.local_rank, non_blocking=True)
 
             if train and self.mixup_fn is not None:
                 source, targets = self.mixup_fn(source, targets)
-            batch_preds, batch_loss = self._run_batch(source, targets, train, curr_iter=it)
+            batch_preds, batch_loss = self._run_batch(source, targets, inp_mask, train, curr_iter=it)
+            if self.dataset_name == "imagenet_a" or self.dataset_name == "imagenet_r":
+                batch_preds = batch_preds[:, self.test_dataset.class_mask]
+                batch_preds_stage_1 = batch_preds_stage_1[:, self.test_dataset.class_mask]
+
             if train:
                 if (it + 1) % self.accum_steps == 0 or it == last_batch_idx:
                     num_updates += 1
@@ -360,7 +379,8 @@ class BaselineTrainer:
                 self.loss_dict_train['train_loss'].update(batch_loss, source.size(0))
                 if self.mixup_fn is None:
                     for key in self.acc_dict_train.keys():
-                        self.acc_dict_train[key].update(batch_preds, targets)
+                        self.acc_dict_train[key].update(batch_preds, targets.long())
+
                     for key in self.per_class_acc_train.keys():
                         self.per_class_acc_train[key].update(batch_preds, targets)
                     if self.num_classes == 2:
@@ -372,7 +392,8 @@ class BaselineTrainer:
             else:
                 self.loss_dict_val['test_loss'].update(batch_loss, source.size(0))
                 for key in self.acc_dict_test.keys():
-                    self.acc_dict_test[key].update(batch_preds, targets)
+                    self.acc_dict_test[key].update(batch_preds, targets.long())
+
                 for key in self.per_class_acc_test.keys():
                     self.per_class_acc_test[key].update(batch_preds, targets)
                 if self.num_classes == 2:
@@ -385,21 +406,23 @@ class BaselineTrainer:
                 print(f"[GPU{self.global_rank}] Epoch {epoch} | Iter {it} | {step_type} Loss {batch_loss:.5f}")
 
         if train:
-            self.scheduler.step(epoch)
             loss_value = self.loss_dict_train['train_loss'].avg
             if self.mixup_fn is None:
                 for key in self.acc_dict_train.keys():
                     accuracies_dict[key] = self.acc_dict_train[key].compute().item() * 100
+
                 for key in self.per_class_acc_train.keys():
                     accuracies_dict_per_class[key] = self.per_class_acc_train[key].compute() * 100
                     for i in range(self.num_classes):
                         accuracies_dict_per_class[key][i] = accuracies_dict_per_class[key][i].item()
                 for key in self.auroc_train.keys():
                     accuracies_dict[key] = self.auroc_train[key].compute().item() * 100
+            self.scheduler.step(epoch)
         else:
             loss_value = self.loss_dict_val['test_loss'].avg
             for key in self.acc_dict_test.keys():
                 accuracies_dict[key] = self.acc_dict_test[key].compute().item() * 100
+
             for key in self.per_class_acc_test.keys():
                 accuracies_dict_per_class[key] = self.per_class_acc_test[key].compute() * 100
                 for i in range(self.num_classes):
@@ -486,6 +509,7 @@ class BaselineTrainer:
         with torch.inference_mode():
             if self.test_loader:
                 test_loss, acc_dict_test, per_class_acc_dict = self._run_epoch(0, self.test_loader, train=False)
+
             print(f'Test loss: {test_loss:.5f}'
                   f'| Test acc: {acc_dict_test["test_acc"]:.5f} '
                   f'| Macro avg acc top1: {acc_dict_test["macro_avg_acc_top1_test"]:.5f}'
@@ -495,6 +519,7 @@ class BaselineTrainer:
                 for key in per_class_acc_dict.keys():
                     for i in range(self.num_classes):
                         print(f'Class {i} | {key}: {per_class_acc_dict[key][i]:.5f}')
+
         if self.local_rank == 0 and self.global_rank == 0:
             logging_dict.update({"test_loss": test_loss})
             logging_dict.update(acc_dict_test)
@@ -503,28 +528,29 @@ class BaselineTrainer:
         self.finish_logging()
 
 
-def launch_baseline_trainer(model: torch.nn.Module,
-                            train_dataset: torch.utils.data.Dataset,
-                            test_dataset: torch.utils.data.Dataset,
-                            batch_size: int,
-                            optimizer: torch.optim.Optimizer,
-                            scheduler: torch.optim.lr_scheduler.LRScheduler,
-                            loss_fn: List[torch.nn.Module],
-                            epochs: int,
-                            save_every: int,
-                            loggers: List,
-                            log_freq: int,
-                            use_amp: bool = False,
-                            snapshot_path: str = "snapshot.pt",
-                            grad_norm_clip: float = 1.0,
-                            num_workers: int = 0,
-                            mixup_fn: Optional[Mixup] = None,
-                            seed: int = 42,
-                            eval_only: bool = False,
-                            use_ddp: bool = False,
-                            grad_accumulation_steps: int = 1,
-                            averaging_params: Optional[Dict] = None,
-                            ) -> None:
+def launch_masked_vit_trainer(model: torch.nn.Module,
+                              train_dataset: torch.utils.data.Dataset,
+                              test_dataset: torch.utils.data.Dataset,
+                              batch_size: int,
+                              optimizer: torch.optim.Optimizer,
+                              scheduler: torch.optim.lr_scheduler.LRScheduler,
+                              loss_fn: List[torch.nn.Module],
+                              epochs: int,
+                              save_every: int,
+                              loggers: List,
+                              log_freq: int,
+                              use_amp: bool = False,
+                              snapshot_path: str = "snapshot.pt",
+                              grad_norm_clip: float = 1.0,
+                              num_workers: int = 0,
+                              mixup_fn: Optional[Mixup] = None,
+                              seed: int = 42,
+                              eval_only: bool = False,
+                              use_ddp: bool = False,
+                              grad_accumulation_steps: int = 1,
+                              dataset_name: str = "",
+                              averaging_params: Optional[Dict] = None,
+                              ) -> None:
     """Trains and tests a PyTorch model.
 
     Passes a target PyTorch models through DistributedTrainer class
@@ -552,22 +578,24 @@ def launch_baseline_trainer(model: torch.nn.Module,
     seed: An integer indicating the random seed to use.
     eval_only: A boolean indicating whether to only run evaluation.
     use_ddp: A boolean indicating whether to use DDP.
-    grad_accumulation_steps: An integer indicating how many steps to accumulate gradients for.
+    ema_params: A dictionary of parameters for EMA.
     """
 
     set_seeds(seed)
     # Loop through training and testing steps for a number of epochs
     if use_ddp:
         ddp_setup()
-    trainer = BaselineTrainer(model=model, train_dataset=train_dataset, test_dataset=test_dataset,
-                              batch_size=batch_size, optimizer=optimizer, scheduler=scheduler,
-                              loss_fn=loss_fn,
-                              save_every=save_every, snapshot_path=snapshot_path, loggers=loggers,
-                              log_freq=log_freq,
-                              use_amp=use_amp,
-                              grad_norm_clip=grad_norm_clip, max_epochs=epochs, num_workers=num_workers,
-                              mixup_fn=mixup_fn, eval_only=eval_only, use_ddp=use_ddp, grad_accumulation_steps=grad_accumulation_steps,
-                              averaging_params=averaging_params)
+    trainer = MaskedViTTrainer(model=model, train_dataset=train_dataset, test_dataset=test_dataset,
+                               batch_size=batch_size, optimizer=optimizer, scheduler=scheduler,
+                               loss_fn=loss_fn,
+                               save_every=save_every, snapshot_path=snapshot_path, loggers=loggers,
+                               log_freq=log_freq,
+                               use_amp=use_amp,
+                               grad_norm_clip=grad_norm_clip, max_epochs=epochs, num_workers=num_workers,
+                               mixup_fn=mixup_fn, eval_only=eval_only, use_ddp=use_ddp,
+                               grad_accumulation_steps=grad_accumulation_steps,
+                               dataset_name=dataset_name,
+                               averaging_params=averaging_params)
     if eval_only:
         trainer.test_only()
     else:

@@ -15,8 +15,8 @@ class FineGrainedBirdClassificationDataset(torch.utils.data.Dataset):
     Variables
     ----------
         data_path, str: Root directory of the dataset.
-        split, int: Percentage of training samples to use for training.
-        mode, str: Current data split.
+        train_val_split_ratio, float: Percentage of training samples to use for training.
+        split, str: Current data split.
             "train": Training split
             "val": Validation split
             "test": Testing split
@@ -24,9 +24,9 @@ class FineGrainedBirdClassificationDataset(torch.utils.data.Dataset):
         image_sub_path, str: Path to the folder containing the images.
     """
 
-    def __init__(self, data_path, split=1, mode='train', transform=None, image_sub_path="images"):
+    def __init__(self, data_path, train_val_split_ratio=1, split='train', transform=None, image_sub_path="images"):
         self.data_path = data_path
-        self.mode = mode
+        self.split = split
         self.transform = transform
         self.image_sub_path = image_sub_path
         self.loader = pil_loader
@@ -41,17 +41,17 @@ class FineGrainedBirdClassificationDataset(torch.utils.data.Dataset):
         dataset = train_test.merge(image_names, on='id')
         dataset = dataset.merge(labels, on='id')
 
-        if mode == 'train':
+        if split == 'train':
             dataset = dataset.loc[dataset['train'] == 1]
             samples_train = np.arange(len(dataset))
-            self.train_samples = samples_train[:int(len(samples_train) * split)]
+            self.train_samples = samples_train[:int(len(samples_train) * train_val_split_ratio)]
             dataset = dataset.iloc[self.train_samples]
-        elif mode == 'test':
+        elif split == 'test':
             dataset = dataset.loc[dataset['train'] == 0]
-        elif mode == 'val':
+        elif split == 'val':
             dataset = dataset.loc[dataset['train'] == 1]
             samples_val = np.arange(len(dataset))
-            self.val_samples = samples_val[int(len(samples_val) * split):]
+            self.val_samples = samples_val[int(len(samples_val) * train_val_split_ratio):]
             dataset = dataset.iloc[self.val_samples]
 
         # training images are labelled 1, test images labelled 0. Add these

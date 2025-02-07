@@ -22,7 +22,8 @@ def parse_args():
     parser.add_argument('--anno_path_test', default='', type=str, required=False)
     parser.add_argument('--metadata_path', default='', type=str, required=False)
     parser.add_argument('--species_id_to_name_file', default='', type=str, required=False)
-    parser.add_argument('--mask_sub_path', default='all_masks', type=str, required=False)
+    parser.add_argument('--mask_sub_path_train', default='segmentations', type=str, required=False)
+    parser.add_argument('--mask_sub_path_test', default='segmentations', type=str, required=False)
 
     # Training
     parser.add_argument('--snapshot_dir', type=str)
@@ -59,28 +60,7 @@ def parse_args():
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
     # Augmentation parameters
-    parser.add_argument('--augmentations_to_use', type=str, default='cub_original',
-                        choices=['timm', 'cub_original', 'siim_acr'])
     parser.add_argument('--image_size', default=448, type=int)
-    parser.add_argument('--color_jitter', type=float, default=0.4, metavar='PCT',
-                        help='Color jitter factor (default: 0.4)')
-    parser.add_argument('--aa', type=str, default='rand-m6-mstd0.5', metavar='NAME',
-                        help='Use AutoAugment policy. "v0" or "original". " + "(default: rand-m6-mstd0.5)'),
-    parser.add_argument('--train_interpolation', type=str, default='bicubic',
-                        help='Training interpolation (random, bilinear, bicubic default: "bicubic")')
-    parser.add_argument('--imagenet_default_mean_and_std', action='store_false', default=True)
-    parser.add_argument('--hflip', type=float, default=0.5, help='Horizontal flip probability')
-    parser.add_argument('--vflip', type=float, default=0., help='Vertical flip probability')
-
-    # Random Erase params
-    parser.add_argument('--reprob', type=float, default=0.0, metavar='PCT',
-                        help='Random erase prob (default: 0.0)')
-    parser.add_argument('--remode', type=str, default='pixel',
-                        help='Random erase mode (default: "pixel")')
-    parser.add_argument('--recount', type=int, default=1,
-                        help='Random erase count (default: 1)')
-    parser.add_argument('--resplit', action='store_true', default=False,
-                        help='Do not random erase first (clean) augmentation split')
 
     # Model params
     parser.add_argument('--model_arch', default='resnet50', type=str,
@@ -137,10 +117,6 @@ def parse_args():
     parser.add_argument('--array_training_job', default=False, action='store_true',
                         help='Whether to run as an array job (i.e. training with multiple random seeds on the same settings)')
 
-    # Label Smoothing
-    parser.add_argument('--smoothing', type=float, default=0.0,
-                        help='Label smoothing (default: 0.0)')
-
     # Model Iterate Averaging Type
     group = parser.add_argument_group('Model iterate average parameters')
     group.add_argument('--averaging_type', default='', type=str, help='Type of model iterate averaging to use')
@@ -151,5 +127,19 @@ def parse_args():
     group.add_argument('--no-model-ema-warmup', action='store_true',
                        help='Enable warmup for model EMA decay.')
 
+    # Use late masking
+    parser.add_argument('--late_masking', default=False, action='store_true')
+
+    # BCE Loss (for multi-class classification) from timm
+    parser.add_argument('--use_bce_loss', default=False, action='store_true')
+    parser.add_argument('--bce-sum', action='store_true', default=False,
+                        help='Sum over classes when using BCE loss.')
+    parser.add_argument('--bce-target-thresh', type=float, default=None,
+                        help='Threshold for binarizing softened BCE targets (default: None, disabled).')
+    parser.add_argument('--bce-pos-weight', type=float, default=None,
+                        help='Positive weighting for BCE loss.')
+    # Label Smoothing
+    parser.add_argument('--smoothing', type=float, default=0.0,
+                        help='Label smoothing (default: 0.0)')
     args = parser.parse_args()
     return args
