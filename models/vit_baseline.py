@@ -18,8 +18,7 @@ class BaselineViT(torch.nn.Module):
     - Option to use only class tokens or only patch tokens or both (concat) for classification
     """
 
-    def __init__(self, init_model: torch.nn.Module, num_classes: int, pooling_type: str,
-                 return_transformer_qkv: bool = False) -> None:
+    def __init__(self, init_model: torch.nn.Module, num_classes: int, pooling_type: str) -> None:
         super().__init__()
         self.num_classes = num_classes
         self.pooling_type = pooling_type
@@ -47,9 +46,6 @@ class BaselineViT(torch.nn.Module):
             raise ValueError("pooling_type must be one of 'cls', 'gap', 'gap_cls'")
         self.h_fmap = int(self.patch_embed.img_size[0] // self.patch_embed.patch_size[0])
         self.w_fmap = int(self.patch_embed.img_size[1] // self.patch_embed.patch_size[1])
-
-        self.return_transformer_qkv = return_transformer_qkv
-        self.convert_blocks_and_attention()
         self._init_weights_head()
 
     def convert_blocks_and_attention(self):
@@ -99,12 +95,7 @@ class BaselineViT(torch.nn.Module):
         # Forward pass through transformer
         x = self.norm_pre(x)
 
-        if self.return_transformer_qkv:
-            # Return keys of last attention layer
-            for i, blk in enumerate(self.blocks):
-                x, qkv = blk(x, return_qkv=True)
-        else:
-            x = self.blocks(x)
+        x = self.blocks(x)
 
         x = self.norm(x)
         if self.pooling_type == "cls":
