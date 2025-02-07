@@ -47,6 +47,7 @@ class BaselineViT(torch.nn.Module):
         self.h_fmap = int(self.patch_embed.img_size[0] // self.patch_embed.patch_size[0])
         self.w_fmap = int(self.patch_embed.img_size[1] // self.patch_embed.patch_size[1])
         self._init_weights_head()
+        self.return_transformer_qkv = False
 
     def convert_blocks_and_attention(self):
         for module in self.modules():
@@ -121,6 +122,7 @@ class BaselineViT(torch.nn.Module):
     ):
         num_blocks = len(self.blocks)
         attn_weights = []
+        self.return_transformer_qkv = True
         if n >= num_blocks:
             raise ValueError(f"n must be less than {num_blocks}")
 
