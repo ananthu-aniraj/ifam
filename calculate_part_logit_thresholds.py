@@ -74,7 +74,6 @@ def parse_args():
 def calc_part_logits(args):
     args.eval_only = True
     args.pretrained_start_weights = True
-    args.stage_1_weights_path = None
     height = args.image_size
     Path(args.save_path).mkdir(parents=True, exist_ok=True)
     if args.dataset == 'siim_acr':

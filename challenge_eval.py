@@ -47,14 +47,6 @@ def parse_args():
 
     # Use part logit thresholds (only for evaluation)
     parser.add_argument('--part_logits_threshold_path', default="", type=str)
-
-    # Hard dropout
-    parser.add_argument('--use_hard_dropout', default=False, action='store_true')
-
-    # Use part embeddings
-    parser.add_argument('--use_part_embed', default=False, action='store_true')
-    # Stage 1 weights path
-    parser.add_argument('--stage_1_weights_path', default=None, type=str)
     # Data
     parser.add_argument('--class_mapping_file_path', default='in_to_in9.json', type=str, required=False)
     parser.add_argument('--batch_size', default=32, type=int, required=False)
