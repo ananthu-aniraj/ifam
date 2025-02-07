@@ -85,7 +85,7 @@ class BaselineViT(torch.nn.Module):
         if self.head.bias is not None:
             nn.init.constant_(self.head.bias, 0.)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.forward_features(x)
         x = self.forward_head(x)
         return x

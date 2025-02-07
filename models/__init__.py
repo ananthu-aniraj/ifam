@@ -7,3 +7,5 @@ from .vit_baseline import *
 from .pdiscoformer_hf import *
 from .attn_mask_vit_2_stage_hf import *
 from .individual_landmark_vit_2_stage_mod_hf import *
+from .attn_mask_vit_decoupled import *
+from .late_mask_vit import *
