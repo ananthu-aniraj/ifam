@@ -17,6 +17,10 @@ torch.backends.cudnn.benchmark = True
 
 def leave_one_out_eval():
     args = parse_args()
+    # Load averaging parameters
+    averaging_params = {'type': args.averaging_type, 'decay': args.model_ema_decay,
+                        'use_warmup': not args.no_model_ema_warmup,
+                        'device': 'cpu' if args.model_ema_force_cpu else None}
 
     train_loggers = get_train_loggers(args)
 
@@ -85,7 +89,8 @@ def leave_one_out_eval():
                                       sub_path_test=args.image_sub_path_test,
                                       dataset_name=args.dataset,
                                       amap_saving_prob=args.amap_saving_prob,
-                                      part_ids_to_remove=parts_to_remove
+                                      part_ids_to_remove=parts_to_remove,
+                                      averaging_params=averaging_params,
                                       )
 
 
