@@ -1,9 +1,8 @@
 # Ref: https://github.com/MadryLab/backgrounds_challenge/blob/master/in9_eval.py
 from torchvision import transforms
+from torchvision.models import get_model
 import torch as ch
 import timm
-import torch.nn as nn
-import numpy as np
 import json
 import os
 import copy
@@ -18,6 +17,7 @@ def parse_args():
     # Model
     parser.add_argument('--use_dinov2_baseline', default=False, action='store_true')
     parser.add_argument('--use_timm_baseline', default=False, action='store_true')
+    parser.add_argument('--use_torchvision_baseline', default=False, action='store_true')
     parser.add_argument('--model_arch', default='resnet50', type=str,
                         help='pick model architecture')
     parser.add_argument('--use_hf_transformers', default=False, action='store_true')
@@ -82,6 +82,8 @@ def main(args):
     # Load the model
     if args.use_dinov2_baseline:
         net = ch.hub.load('facebookresearch/dinov2', args.model_arch)
+    elif args.use_torchvision_baseline:
+        net = get_model(args.model_arch, weights="DEFAULT")
     elif args.use_timm_baseline:
         net = timm.create_model(args.model_arch, pretrained=True)
     else:
@@ -92,7 +94,7 @@ def main(args):
         else:
             state_dict = copy.deepcopy(snapshot_data)
         net.load_state_dict(state_dict, strict=True)
-    eval_baseline = args.use_dinov2_baseline or args.use_timm_baseline
+    eval_baseline = args.use_dinov2_baseline or args.use_timm_baseline or args.use_torchvision_baseline
     model = NormalizedModel(net, dataset=train_ds)
     model.to(device)
     model.eval()

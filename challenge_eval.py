@@ -1,5 +1,6 @@
 # Ref: https://github.com/MadryLab/backgrounds_challenge/blob/master/challenge_eval.py
 from torchvision import transforms
+from torchvision.models import get_model
 import torch as ch
 import timm
 import numpy as np
@@ -19,6 +20,7 @@ def parse_args():
     # Model
     parser.add_argument('--use_dinov2_baseline', default=False, action='store_true')
     parser.add_argument('--use_timm_baseline', default=False, action='store_true')
+    parser.add_argument('--use_torchvision_baseline', default=False, action='store_true')
     parser.add_argument('--model_arch', default='resnet50', type=str,
                         help='pick model architecture')
     parser.add_argument('--use_hf_transformers', default=False, action='store_true')
@@ -75,6 +77,8 @@ def main(args):
     # Load the model
     if args.use_dinov2_baseline:
         net = ch.hub.load('facebookresearch/dinov2', args.model_arch)
+    elif args.use_torchvision_baseline:
+        net = get_model(args.model_arch, weights="DEFAULT")
     elif args.use_timm_baseline:
         net = timm.create_model(args.model_arch, pretrained=True)
     else:
@@ -89,7 +93,7 @@ def main(args):
     model.to(device)
     model.eval()
 
-    eval_baseline = args.use_dinov2_baseline or args.use_timm_baseline
+    eval_baseline = args.use_dinov2_baseline or args.use_timm_baseline or args.use_torchvision_baseline
     # Load backgrounds
     bg_ds = ImageNet9(f'{base_path_to_eval}/only_bg_t')
     bg_loader = bg_ds.make_loaders(batch_size=batch_size, workers=workers)
@@ -115,11 +119,6 @@ def main(args):
         total_computed_per_class = 0
         # Evaluate model
         for i in tqdm(range(len(fgs)), desc='Images', leave=False):
-            if total_computed % 50 == 0:
-                print(
-                    f'At image {i} for class {fg_classname}')
-                print(f'Up until now, have {total_vulnerable}/{total_computed} vulnerable foregrounds.')
-
             mask_name = fgs[i]
             fg_mask_path = f'{fg_mask_base}/{fg_classname}/{mask_name}'
             fg_mask = np.load(fg_mask_path)
@@ -133,16 +132,13 @@ def main(args):
             is_adv = adv_bgs_eval_model(bg_loader, model, img, fg_mask, fg_class, batch_size, map_to_in9,
                                         map_in_to_in9=True, device=device, eval_baseline=eval_baseline)
             # print(f'Image {i} of class {fg_classname} is {is_adv}.')
-            total_vulnerable += is_adv
-            total_computed += 1
             total_vulnerable_per_class += is_adv
             total_computed_per_class += 1
         percent_vulnerable_class = total_vulnerable_per_class / total_computed_per_class * 100
         per_class_challenge_accuracies[fg_classname] = 100 - percent_vulnerable_class
         per_class_percent_vulnerable[fg_classname] = percent_vulnerable_class
-        print(f'Class {fg_classname} challenge accuracy: {100 - percent_vulnerable_class:.2f}%')
-        print(f'Class {fg_classname} vulnerable foreground percentage: {percent_vulnerable_class:.2f}%')
-
+        total_vulnerable += total_vulnerable_per_class
+        total_computed += total_computed_per_class
     print('Evaluation complete')
     percent_vulnerable = total_vulnerable / total_computed * 100
     print(f'Summary: {total_vulnerable}/{total_computed} ({percent_vulnerable:.2f}%) are vulnerable foregrounds.')
