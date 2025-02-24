@@ -1,5 +1,6 @@
 import torch
 import math
+import inspect
 from timm.optim.lars import Lars
 from timm.optim.lamb import Lamb
 from utils.training_utils.ddp_utils import calculate_effective_batch_size
@@ -15,19 +16,31 @@ def build_optimizer(args, params_groups, dataset_train):
     """
     grad_averaging = not args.turn_off_grad_averaging
     weight_decay = calculate_weight_decay(args, dataset_train)
-    print(f'Weight decay in current training: {weight_decay:.6f}')
+    device_type = 'cuda' if torch.cuda.is_available() else 'cpu'
     if args.optimizer_type == 'adamw':
+        fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+        use_fused = fused_available and device_type == 'cuda'
+        extra_args = dict(fused=True) if use_fused else dict()
         return torch.optim.AdamW(params=params_groups, betas=(args.betas1, args.betas2), lr=args.lr,
-                                 weight_decay=weight_decay)
+                                 weight_decay=weight_decay, **extra_args)
     elif args.optimizer_type == 'sgd':
+        fused_available = 'fused' in inspect.signature(torch.optim.SGD).parameters
+        use_fused = fused_available and device_type == 'cuda'
+        extra_args = dict(fused=True) if use_fused else dict()
         return torch.optim.SGD(params=params_groups, lr=args.lr, momentum=args.momentum, weight_decay=weight_decay,
-                               nesterov=True)
+                               nesterov=True, **extra_args)
     elif args.optimizer_type == 'adam':
+        fused_available = 'fused' in inspect.signature(torch.optim.Adam).parameters
+        use_fused = fused_available and device_type == 'cuda'
+        extra_args = dict(fused=True) if use_fused else dict()
         return torch.optim.Adam(params=params_groups, betas=(args.betas1, args.betas2), lr=args.lr,
-                                weight_decay=weight_decay)
+                                weight_decay=weight_decay, **extra_args)
     elif args.optimizer_type == 'nadam':
+        fused_available = 'fused' in inspect.signature(torch.optim.NAdam).parameters
+        use_fused = fused_available and device_type == 'cuda'
+        extra_args = dict(fused=True) if use_fused else dict()
         return torch.optim.NAdam(params=params_groups, betas=(args.betas1, args.betas2), lr=args.lr,
-                                 weight_decay=weight_decay)
+                                 weight_decay=weight_decay, **extra_args)
     elif args.optimizer_type == 'lars':
         return Lars(params=params_groups, lr=args.lr, momentum=args.momentum, weight_decay=weight_decay,
                     dampening=args.dampening, trust_coeff=args.trust_coeff, trust_clip=False,
