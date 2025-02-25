@@ -58,6 +58,19 @@ def ddp_setup():
     return
 
 
+def get_local_rank():
+    use_ddp = multi_gpu_check()
+    is_slurm_job = "SLURM_NODEID" in os.environ
+    if is_slurm_job:
+        local_rank = int(os.environ['SLURM_LOCALID'])
+    else:
+        if not use_ddp:
+            local_rank = 0
+        else:
+            local_rank = int(os.environ["LOCAL_RANK"])
+    return local_rank
+
+
 def set_seeds(seed_value: int = 42):
     # Set the manual seeds
     torch.manual_seed(seed_value)

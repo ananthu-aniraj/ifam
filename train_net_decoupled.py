@@ -10,7 +10,7 @@ from utils.misc_utils import sync_bn_conversion, check_snapshot
 from utils.wandb_params import get_train_loggers
 from utils.training_utils.optimizer_params import build_optimizer, layer_group_matcher_baseline
 from utils.training_utils.scheduler_params import build_scheduler
-from utils.training_utils.ddp_utils import multi_gpu_check
+from utils.training_utils.ddp_utils import multi_gpu_check, get_local_rank
 from engine.distributed_trainer_decoupled_two_stage import launch_masked_vit_trainer
 
 torch.backends.cudnn.benchmark = True
@@ -37,12 +37,15 @@ def decoupled_train_eval():
     if use_ddp:
         model = sync_bn_conversion(model)
 
+    local_rank = get_local_rank()
+    model = model.to(local_rank, non_blocking=True)
+
     # Load the loss function
     loss_fn, mixup_fn = load_classification_loss(args, num_cls)
 
     # Load the optimizer and scheduler
-    param_groups = layer_group_matcher_baseline(args, model)
-    optimizer = build_optimizer(args, param_groups, dataset_train)
+    param_groups, weight_decay = layer_group_matcher_baseline(args, model, dataset_train)
+    optimizer = build_optimizer(args, param_groups, weight_decay)
     scheduler = build_scheduler(args, optimizer)
 
     averaging_params = {'type': args.averaging_type, 'decay': args.model_ema_decay,
@@ -65,6 +68,8 @@ def decoupled_train_eval():
                               loggers=train_loggers,
                               log_freq=args.log_interval,
                               use_amp=args.use_amp,
+                              use_zero=args.use_zero,
+                              param_groups=param_groups,
                               snapshot_path=args.snapshot_dir,
                               grad_norm_clip=args.grad_norm_clip,
                               num_workers=args.num_workers,

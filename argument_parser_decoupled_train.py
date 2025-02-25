@@ -86,6 +86,7 @@ def parse_args():
     parser.add_argument('--always_adapt', action='store_true', default=False)
     parser.add_argument('--turn_off_grad_averaging', action='store_true', default=False)
     parser.add_argument('--max_grad_norm', default=1.0, type=float)
+    parser.add_argument('--use_zero', default=False, action='store_true')
 
     # * Scheduler params
     parser.add_argument('--scheduler_type', default='cosine',

@@ -6,16 +6,15 @@ from timm.optim.lamb import Lamb
 from utils.training_utils.ddp_utils import calculate_effective_batch_size
 
 
-def build_optimizer(args, params_groups, dataset_train):
+def build_optimizer(args, params_groups, weight_decay):
     """
     Function to build the optimizer
     :param args: arguments from the command line
     :param params_groups: parameters to be optimized
-    :param dataset_train: training dataset
+    :param weight_decay: weight decay
     :return: optimizer
     """
     grad_averaging = not args.turn_off_grad_averaging
-    weight_decay = calculate_weight_decay(args, dataset_train)
     device_type = 'cuda' if torch.cuda.is_available() else 'cpu'
     if args.optimizer_type == 'adamw':
         fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
@@ -84,13 +83,15 @@ def calculate_weight_decay(args, dataset_train):
     return weight_decay
 
 
-def layer_group_matcher_baseline(args, model):
+def layer_group_matcher_baseline(args, model, dataset_train):
     """
     Function to group the parameters of the model into different groups
     :param args: Arguments from the command line
     :param model: Model to be trained
+    :param dataset_train: Training dataset
     :return: param_groups: Parameters grouped into different groups
     """
+    weight_decay = calculate_weight_decay(args, dataset_train)
     scratch_layers = ["head.", "fc.", "attn_pool.", "sim_pool", "fc_norm"]
     scratch_parameters = []
     no_weight_decay_params_scratch = []
@@ -120,16 +121,18 @@ def layer_group_matcher_baseline(args, model):
     if len(no_weight_decay_params_scratch) > 0:
         param_groups.append(
             {'params': no_weight_decay_params_scratch, 'lr': args.lr * args.scratch_lr_factor, 'weight_decay': 0.0})
-    return param_groups
+    return param_groups, weight_decay
 
 
-def layer_group_matcher_pdisco_2_stage(args, model):
+def layer_group_matcher_pdisco_2_stage(args, model, dataset_train):
     """
     Function to group the parameters of the model into different groups
     :param args: Arguments from the command line
     :param model: Model to be trained
+    :param dataset_train: Training dataset
     :return: param_groups: Parameters grouped into different groups
     """
+    weight_decay = calculate_weight_decay(args, dataset_train)
     scratch_layers = ["fc_class_landmarks"]
     scratch_layers_stage_2 = ["head", "head_norm", "fc_norm"]
     modulation_layers = ["modulation"]
@@ -241,4 +244,4 @@ def layer_group_matcher_pdisco_2_stage(args, model):
                     {'params': scratch_parameters_stage_2, 'lr': args.lr * args.scratch_lr_factor},
                     {'params': scratch_parameters_stage_2_no_wd, 'lr': args.lr * args.scratch_lr_factor, 'weight_decay': 0.0}]
 
-    return param_groups
+    return param_groups, weight_decay

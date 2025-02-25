@@ -7,6 +7,7 @@ import copy
 import torch
 import torchmetrics
 from torch.distributed import destroy_process_group
+from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -39,6 +40,8 @@ class BaselineTrainer:
             loggers: List,
             log_freq: int = 10,
             use_amp: bool = False,
+            use_zero: bool = False,
+            param_groups: List = None,
             grad_norm_clip: float = 1.0,
             max_epochs: int = 100,
             num_workers: int = 4,
@@ -49,6 +52,7 @@ class BaselineTrainer:
             averaging_params: Optional[Dict] = None,
     ) -> None:
         self._init_ddp(use_ddp)
+        self.model = model
         self.num_classes = model.num_classes
         # Top-k accuracy metrics for evaluation
         self._init_accuracy_metrics()
@@ -79,13 +83,11 @@ class BaselineTrainer:
                 loggers[0] = init_wandb(loggers[0])
         self.loggers = loggers
         self.log_freq = log_freq
-        self.optimizer = optimizer
-        self.scheduler = scheduler
         self.grad_norm_clip = grad_norm_clip
         self.max_epochs = max_epochs
         self.mixup_fn = mixup_fn
-        self.epoch_test_accuracies = []
         self.current_epoch = 0
+        self.max_acc = 0
         self.accum_steps = grad_accumulation_steps
         # Find Pytorch data type
         if use_amp:
@@ -100,7 +102,26 @@ class BaselineTrainer:
             self.scaler = torch.GradScaler(device="cuda", enabled=(self.amp_dtype == 'float16'))
         except AttributeError:
             self.scaler = torch.cuda.amp.GradScaler(enabled=(self.amp_dtype == 'float16'))
-
+        if use_zero:
+            defaults_dict = optimizer.defaults
+            # Remove weight decay and lr from the defaults_dict
+            defaults_dict.pop('weight_decay', None)
+            defaults_dict.pop('lr', None)
+            try:
+                optimizer_zero = ZeroRedundancyOptimizer(params=param_groups[0]['params'],
+                                                         optimizer_class=optimizer.__class__, lr=param_groups[0]['lr'],
+                                                         weight_decay=param_groups[0]['weight_decay'],
+                                                         **defaults_dict)
+                if len(param_groups) > 1:
+                    for param_group in param_groups[1:]:
+                        optimizer_zero.add_param_group(param_group)
+                self.optimizer = optimizer_zero
+            except AttributeError:
+                print("ZeroRedundancyOptimizer not supported. Using normal optimizer")
+                self.optimizer = optimizer
+        else:
+            self.optimizer = optimizer
+        self.scheduler = scheduler
         if os.path.isfile(os.path.join(snapshot_path, f"snapshot_best.pt")):
             print("Loading snapshot")
             self._load_snapshot()
@@ -119,7 +140,6 @@ class BaselineTrainer:
             self.model = DDP(self.model, device_ids=[self.local_rank])
         else:
             print("Using single GPU")
-        self.epoch_test_accuracies = []
         if self.local_rank == 0 and self.global_rank == 0:
             for logger in self.loggers:
                 logger.watch(model, log="all", log_freq=self.log_freq)
@@ -249,6 +269,16 @@ class BaselineTrainer:
             drop_last=drop_last,
         )
 
+    def return_optimizer_state(self):
+        if hasattr(self.optimizer, "consolidate_state_dict"):
+            # there are optimizers like PyTorch's ZeroRedundancyOptimizer that shard their
+            # states, and to avoid OOM we consolidate the full state on rank 0 only
+            self.optimizer.consolidate_state_dict(to=0)
+            return self.optimizer.state_dict() if self.global_rank == 0 else {}
+
+            # for optimizers that are not sharded, we return the state dict on all ranks
+        return self.optimizer.state_dict()
+
     def _load_snapshot(self) -> None:
         loc = f"cuda:{self.local_rank}"
         try:
@@ -274,8 +304,6 @@ class BaselineTrainer:
         self.optimizer.load_state_dict(snapshot.optimizer_state)
         self.epochs_run = snapshot.finished_epoch
         self.scheduler.step(snapshot.finished_epoch)
-        if snapshot.epoch_test_accuracies is not None:
-            self.epoch_test_accuracies = copy.deepcopy(snapshot.epoch_test_accuracies)
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
     def _run_batch(self, source, targets, train: bool = True, curr_iter: int = 0) -> Tuple[Any, Any]:
@@ -408,8 +436,7 @@ class BaselineTrainer:
                 accuracies_dict[key] = self.auroc_test[key].compute().item() * 100
         return loss_value, accuracies_dict, accuracies_dict_per_class
 
-    def _save_snapshot(self, epoch, save_best: bool = False):
-        # capture snapshot
+    def _save_snapshot(self, epoch, optimizer_state_dict, save_best: bool = False, save_last: bool = False) -> None:
         if self.model_ema is not None:
             model = self.model_ema.module
         else:
@@ -417,9 +444,8 @@ class BaselineTrainer:
         raw_model = model.module if hasattr(model, "module") else model
         snapshot = Snapshot(
             model_state=raw_model.state_dict(),
-            optimizer_state=self.optimizer.state_dict(),
+            optimizer_state=optimizer_state_dict,
             finished_epoch=epoch,
-            epoch_test_accuracies=self.epoch_test_accuracies,
         )
         # save snapshot
         snapshot = asdict(snapshot)
@@ -427,14 +453,16 @@ class BaselineTrainer:
             save_path_base = self.snapshot_path
         else:
             save_path_base = os.path.dirname(self.snapshot_path)
-        if epoch == self.max_epochs:
+        if save_last:
             save_path = os.path.join(save_path_base, f"snapshot_final.pt")
-        elif save_best:
+            torch.save(snapshot, save_path)
+        if save_best:
             save_path = os.path.join(save_path_base, f"snapshot_best.pt")
-        else:
+            torch.save(snapshot, save_path)
+        if not save_best and not save_last:
             save_path = os.path.join(save_path_base, f"snapshot_{epoch}.pt")
+            torch.save(snapshot, save_path)
 
-        torch.save(snapshot, save_path)
         print(f"Snapshot saved at epoch {epoch}")
 
     def finish_logging(self):
@@ -455,28 +483,34 @@ class BaselineTrainer:
             if self.local_rank == 0 and self.global_rank == 0:
                 logging_dict.update({"train_loss": train_loss})
                 logging_dict.update(acc_dict_train)
-            if self.local_rank == 0 and epoch % self.save_every == 0:
-                self._save_snapshot(epoch)
-            elif self.local_rank == 0 and epoch == self.max_epochs:
-                self._save_snapshot(epoch)
+            if self.local_rank == 0 and self.global_rank == 0:
+                logging_dict.update({"train_loss": train_loss})
+                logging_dict.update(acc_dict_train)
 
             # eval run
+            save_best = False
             if self.test_loader:
                 self.model.eval()
                 test_loss, acc_dict_test, _ = self._run_epoch(epoch, self.test_loader, train=False)
-                if self.local_rank == 0 and self.global_rank == 0:
-                    test_acc = acc_dict_test['test_acc']
-                    self.epoch_test_accuracies.append(test_acc)
-                    max_acc = max(self.epoch_test_accuracies)
-                    max_acc_index = self.epoch_test_accuracies.index(max_acc)
-                    if max_acc_index == len(self.epoch_test_accuracies) - 1:
-                        self._save_snapshot(epoch, save_best=True)
-
+                test_acc = acc_dict_test['test_acc']
+                if test_acc > self.max_acc:
+                    self.max_acc = test_acc
+                    save_best = True
+                if self.global_rank == 0:
                     logging_dict.update({"test_loss": test_loss
                                          })
                     logging_dict.update(acc_dict_test)
-                    for logger in self.loggers:
-                        logger.log(logging_dict)
+
+            if (
+                    epoch % self.save_every == 0 or epoch == self.max_epochs) or save_best:
+                optimizer_state_dict = self.return_optimizer_state()
+                if optimizer_state_dict:
+                    self._save_snapshot(epoch, optimizer_state_dict, save_best=save_best,
+                                        save_last=(epoch == self.max_epochs))
+
+            if self.global_rank == 0:
+                for logger in self.loggers:
+                    logger.log(logging_dict)
         if self.local_rank == 0 and self.global_rank == 0:
             self.finish_logging()
 
@@ -515,6 +549,8 @@ def launch_baseline_trainer(model: torch.nn.Module,
                             loggers: List,
                             log_freq: int,
                             use_amp: bool = False,
+                            use_zero: bool = False,
+                            param_groups: List = None,
                             snapshot_path: str = "snapshot.pt",
                             grad_norm_clip: float = 1.0,
                             num_workers: int = 0,
@@ -560,7 +596,10 @@ def launch_baseline_trainer(model: torch.nn.Module,
     if use_ddp:
         ddp_setup()
     trainer = BaselineTrainer(model=model, train_dataset=train_dataset, test_dataset=test_dataset,
-                              batch_size=batch_size, optimizer=optimizer, scheduler=scheduler,
+                              batch_size=batch_size,
+                              use_zero=use_zero,
+                              param_groups=param_groups,
+                              optimizer=optimizer, scheduler=scheduler,
                               loss_fn=loss_fn,
                               save_every=save_every, snapshot_path=snapshot_path, loggers=loggers,
                               log_freq=log_freq,

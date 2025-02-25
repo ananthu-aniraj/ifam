@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--seed', default=42, type=int)
     parser.add_argument('--grad_accumulation_steps', default=1, type=int)
+    parser.add_argument('--use_zero', default=False, action='store_true')
 
     # * Misc training params
     parser.add_argument('--grad_norm_clip', default=0.0, type=float)
