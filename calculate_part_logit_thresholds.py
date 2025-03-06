@@ -119,11 +119,11 @@ def calc_part_logits(args):
         with torch.no_grad():
             pred_stage_2, attn_maps_combined, attn_maps_fg_bg_combined, all_features_mod, pred_stage_1, part_logits = model(
                 images)
-            part_logits_train.append(part_logits)
-            attn_maps_combined_train.append(attn_maps_combined)
+            part_logits_train.append(part_logits.cpu())
+            attn_maps_combined_train.append(attn_maps_combined.cpu())
 
-    part_logits_train = torch.cat(part_logits_train, dim=0).cpu()
-    attn_maps_combined_train = torch.cat(attn_maps_combined_train, dim=0).cpu()
+    part_logits_train = torch.cat(part_logits_train, dim=0)
+    attn_maps_combined_train = torch.cat(attn_maps_combined_train, dim=0)
     part_assignments = torch.argmax(attn_maps_combined_train, dim=1)  # get the part assignments
     part_logits_full_matched = {}
     for idx, (logits, assignment) in enumerate(zip(part_logits_train, part_assignments)):
