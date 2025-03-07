@@ -80,7 +80,7 @@ def calc_part_logits(args):
         cxr_mean = (0.48865, 0.48865, 0.48865)
         cxr_std = (0.24621, 0.24621, 0.24621)
         image_transforms: A.Compose = A.Compose([
-            A.ToRGB(always_apply=True),
+            A.ToRGB(),
             A.Resize(args.image_size, args.image_size),
             A.Normalize(mean=cxr_mean, std=cxr_std),
             ToTensorV2()
