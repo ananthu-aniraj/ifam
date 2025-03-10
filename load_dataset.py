@@ -50,10 +50,10 @@ def load_train_test_datasets(args, train_transforms, test_transforms):
                                           variant=args.dataset)
         num_cls = 1000
     elif args.dataset == 'imagenet':
-        dataset_train = datasets.ImageNet(root=args.data_path, split=args.image_sub_path_train,
-                                          transform=train_transforms)
-        dataset_test = datasets.ImageNet(root=args.data_path, split=args.image_sub_path_test,
-                                         transform=test_transforms)
+        dataset_train = datasets.ImageFolder(root=os.path.join(args.data_path, args.image_sub_path_train),
+                                             transform=train_transforms)
+        dataset_test = datasets.ImageFolder(root=os.path.join(args.data_path, args.image_sub_path_test),
+                                            transform=test_transforms)
         num_cls = len(dataset_test.classes)
         dataset_test.num_classes = num_cls
         dataset_train.num_classes = num_cls
@@ -99,8 +99,8 @@ def load_single_split(args, image_transforms, split='test', image_sub_path='imag
                                           variant=args.dataset)
         num_cls = 1000
     elif args.dataset == 'imagenet':
-        dataset_test = datasets.ImageNet(root=args.data_path, split=image_sub_path,
-                                         transform=image_transforms)
+        dataset_test = datasets.ImageFolder(root=os.path.join(args.data_path, image_sub_path),
+                                            transform=image_transforms)
         num_cls = len(dataset_test.classes)
         dataset_test.num_classes = num_cls
     elif args.dataset == 'imagenet_v2':
