@@ -37,7 +37,7 @@ The command line parameters in the training script related to Weights and Biases
 ## Training Command
 The main training command for the experiments in the paper are provided below. Please read the [Dataset-specific Parameters](#dataset-specific-parameters) and [Model-specific Parameters](#model-specific-parameters) sections to adjust the parameters as required for your experiments.
 
-For example, to reproduce the training of the model on the CUB dataset for K=8 foreground parts, you can use the following command to train the model on a single node with 4 GPUs:
+For example, to reproduce the training of the model on the CUB dataset for K=8 foreground parts, you can use the following command to train the model on a single node with 8 GPUs:
 ```
 torchrun \
 --nnodes=1 \
