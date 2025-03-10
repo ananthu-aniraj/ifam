@@ -101,6 +101,33 @@
       < model specific parameters >
       ```
     
+- To evaluate models trained on the IN-1K dataset, use the following command:
+    ```
+    python train_net.py \
+    --eval_only \
+    --data_path <base path to dataset>/imagenet \
+    --dataset imagenet \
+    --image_sub_path_train train \
+    --image_sub_path_test val \
+    --train_split 1 \
+    --eval_mode test \
+    --image_size 224 \
+    --augmentations_to_use timm \
+    < model specific parameters >
+    ```
+
+- To evaluate IN-1K models on ImageNet-9 (IN-9) variants, use the following command:
+  ```
+  python in9_eval.py \
+  -- data-path <base path to dataset>/bg_challenge \
+  -- class_mapping_file_path <path to the class mapping file> \
+  --eval-dataset original \
+  --checkpoint <path to the model checkpoint> \
+  < model specific parameters >
+  ```
+  Change the `--eval-dataset` argument to `mixed_same`, `mixed_rand` to evaluate on the corresponding IN-9 variant. BG-GAP is the difference between the accuracy on the `mixed_same` and `mixed_rand` datasets.
+
+    
 ## Evaluation with test-time interventions
 
 ### Low-confidence token removal

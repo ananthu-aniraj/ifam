@@ -3,8 +3,7 @@
 Implementation of the paper "Inherently Faithful Attention Maps for Vision Transformers" 
 
 # Abstract
-We introduce an attention-based method that uses learned binary attention masks to ensure that only attended image regions influence the prediction. Context can strongly affect object perception, sometimes leading to biased representations, particularly when objects appear in out-of-distribution backgrounds. At the same time, many image-level object-centric tasks require identifying relevant regions, often requiring context. To address this conundrum, we propose a two-stage framework: stage 1 processes the full image to discover object parts and identify task-relevant regions, while stage 2 leverages input attention masking to restrict its receptive field to these regions, enabling a focused analysis while filtering out potentially spurious information. Both stages are trained jointly, allowing stage 2 to refine stage 1. Extensive experiments across diverse benchmarks demonstrate that our approach significantly improves robustness against spurious correlations.
-
+We introduce an attention-based method that uses learned binary attention masks to ensure that only attended image regions influence the prediction. Context can strongly affect object perception, sometimes leading to biased representations, particularly when objects appear in out-of-distribution backgrounds. At the same time, many image-level object-centric tasks require identifying relevant regions, often requiring context. To address this conundrum, we propose a two-stage framework: stage 1 processes the full image to discover object parts and identify task-relevant regions, while stage 2 leverages input attention masking to restrict its receptive field to these regions, enabling a focused analysis while filtering out potentially spurious information. Both stages are trained jointly, allowing stage 2 to refine stage 1. Extensive experiments across diverse benchmarks demonstrate that our approach significantly improves robustness against spurious correlations and out-of-distribution backgrounds.
 # Setup
 To install the required packages, run the following command:
 ```conda env create -f environment.yml```
@@ -106,6 +105,34 @@ The folder structure should look like this:
 |── robust_test_set
 └── non_robust_test_set
 ```
+
+### ImageNet-1k
+The dataset can be downloaded from [here](https://image-net.org/download.php). Follow the instructions in this blog post to download the dataset: [link](https://medium.com/@billpsomas/download-and-prepare-imagenet-401bf10a681).
+The folder structure should look like this:
+
+```
+(root folder)
+|── train
+|   |── n01440764
+|   |   |── n01440764_10026.JPEG
+|   |   |── n01440764_10027.JPEG
+|   |── n01443537
+|   |   |── n01443537_1000.JPEG
+|   |   |── n01443537_1001.JPEG
+|── val
+|   |── n01440764
+|   |   |── ILSVRC2012_val_00000293.JPEG
+|   |   |── ILSVRC2012_val_00002138.JPEG
+|   |── n01443537
+|   |   |── ILSVRC2012_val_00000001.JPEG
+|   |   |── ILSVRC2012_val_00000002.JPEG
+```
+
+### ImageNet-9
+The dataset can be downloaded from [here](https://github.com/MadryLab/backgrounds_challenge/releases/download/data/backgrounds_challenge_data.tar.gz). The JSON file to map the class names to the ImageNet-1k classes can be downloaded from [here](https://github.com/MadryLab/backgrounds_challenge/blob/master/in_to_in9.json).
+The data will be downloaded in the correct folder structure. No additional steps are required.
+
+
 # Training
 The details of running the training script can be found in the [training instructions](training_instructions.md) file.
 

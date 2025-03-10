@@ -16,8 +16,11 @@ The scaling is not implemented in the training script, so you will have to manua
 ### Recommended Batch Sizes 
 - For models trained on CUB/Waterbirds/SIIM-ACR, we recommend using a batch size of 16 (or higher per GPU - we trained with an overall batch size of 128 with 8 GPUs).
 - For models trained on MetaShifts, we recommend using a batch size of 32 (or higher per GPU - we trained with an overall batch size of 128 with 4 GPUs). 
+- For models trained on ImageNet-1K, we recommend using a batch size of 128 (or higher per GPU - we trained with an overall batch size of 1024 with 8 GPUs).
 - In case these batch sizes do not fit in the GPU memory, you can use gradient accumulation to simulate a higher batch size. For example, if you have 1 GPU which can only fit a batch size of 16, you can set the `--gradient_accumulation_steps` parameter to 2 to simulate a batch size of 32. In this case, please use the learning rate corresponding to the batch size of 16.
 - Another option is to use mixed precision training. To use this, use the `--use_amp` flag in the training script. This will automatically use the `torch.cuda.amp` library for mixed precision training and should help in reducing the memory footprint.
+- TIP:  If you are using AMP, turn on the model iterate averaging by using the `--averaging_type` flag. Set it to `ema` for exponential moving average. This can help in stabilizing the training process.
+- Additional memory saving can be achieved by using the [Zero Redundancy Optimizer (ZeRO)](https://pytorch.org/docs/stable/distributed.optim.html#torch.distributed.optim.ZeroRedundancyOptimizer) from DeepSpeed. This can be activated by using the `--use_zero` flag in the training script.
 
 ## Experiment Tracking
 It is recommended to use [Weights and Biases](https://wandb.ai/site) for tracking the experiments. The `--wandb` flag can be used to enable this feature. Feel free to remove the `--wandb` flag if you don`t want to use it.
@@ -158,6 +161,21 @@ torchrun \
 --augmentations_to_use cub_original \
 < model specific parameters >
 ```
+- ImageNet-1K dataset:
+```
+torchrun \
+--nnodes=<number of machines> \
+--nproc_per_node=<gpus per node> \
+<base path to the code>/train_net.py \
+--data_path <base path to dataset>/imagenet \
+--dataset imagenet \
+--image_sub_path_train train \
+--image_sub_path_test val \
+--image_size 224 \
+--augmentations_to_use timm \
+< model specific parameters >
+```
+
 ### Model-specific Parameters
 - `--model_arch`: The architecture of the model. For the experiments in the paper, we use the [ViT-Base DinoV2](https://huggingface.co/timm/vit_base_patch14_reg4_dinov2.lvd142m) model. In theory, any model from the timm library supported by the [VisionTransformer class](https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py) can be used. Additionally, we also support all the torchvision and timm ResNet models and the timm ConvNeXt models. 
 - `--use_hf_transformers`: Use the HuggingFace Transformers library for the model. This is used for loading the [RAD-DINO](https://huggingface.co/microsoft/rad-dino) model, in combination with the `--model_arch` and `--pretrained_start_weights` flag. This is used for the experiments in the paper for SIIM-ACR.
