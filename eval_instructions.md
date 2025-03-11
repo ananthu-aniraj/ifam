@@ -119,8 +119,8 @@
 - To evaluate IN-1K models on ImageNet-9 (IN-9) variants, use the following command:
   ```
   python in9_eval.py \
-  -- data-path <base path to dataset>/bg_challenge \
-  -- class_mapping_file_path <path to the class mapping file> \
+  --data-path <base path to dataset>/bg_challenge \
+  --class_mapping_file_path <path to the class mapping file> \
   --eval-dataset original \
   --checkpoint <path to the model checkpoint> \
   < model specific parameters >
