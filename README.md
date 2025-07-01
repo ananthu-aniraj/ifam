@@ -11,21 +11,20 @@ To install the required packages, run the following command:
 ```conda env create -f environment.yml```
 
 Otherwise, you can also individually install the following packages:
-1. [PyTorch](https://pytorch.org/get-started/locally/): Tested upto version 2.5.1.
+1. [PyTorch](https://pytorch.org/get-started/locally/): Tested upto version 2.7.1.
 2. [Colorcet](https://colorcet.holoviz.org/getting_started/index.html)
 3. [Matplotlib](https://matplotlib.org/stable/users/installing.html)
 4. [OpenCV](https://pypi.org/project/opencv-python-headless/)
 5. [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html)
-6. [Scikit-Image](https://scikit-image.org/docs/stable/install.html)
+6. [Scikit-Image](https://scikit-image.org/docs/stable/user_guide/install.html)
 7. [Scikit-Learn](https://scikit-learn.org/stable/install.html) 
-8. [TorchMetrics](https://torchmetrics.readthedocs.io/en/latest/pages/install.html)
+8. [TorchMetrics](https://lightning.ai/docs/torchmetrics/stable/)
 9. [timm](https://pypi.org/project/timm/)
 10. [wandb](https://pypi.org/project/wandb/): It is recommended to create an account and use it for tracking the experiments. Use the '--wandb' flag when running the training script to enable this feature.
 11. [pycocotools](https://pypi.org/project/pycocotools/)
-12. [pytopk](https://pypi.org/project/pytopk/)
-13. [huggingface-hub](https://pypi.org/project/huggingface-hub/)
-14. [pydicom](https://pydicom.github.io/pydicom/stable/tutorials/installation.html)
-15. [albumentations](https://albumentations.ai/docs/getting_started/installation/)
+12. [huggingface-hub](https://pypi.org/project/huggingface-hub/)
+13. [pydicom](https://pydicom.github.io/pydicom/stable/tutorials/installation.html)
+14. [albumentations](https://albumentations.ai/docs/)
 
 # Datasets
 ### CUB

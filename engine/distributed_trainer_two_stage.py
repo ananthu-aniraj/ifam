@@ -17,7 +17,7 @@ from timm.utils.model_ema import ModelEmaV3
 
 from losses import *
 from utils.data_utils.reversible_affine_transform import generate_affine_trans_params
-from utils.training_utils.ddp_utils import ddp_setup, set_seeds
+from utils.training_utils.ddp_utils import ddp_setup, set_seeds, get_state_dict, save_on_master
 from utils.training_utils.engine_utils import load_state_dict_snapshot, AverageMeter
 from utils.training_utils.snapshot_class import Snapshot
 from utils.visualize_att_maps import VisualizeAttentionMaps
@@ -723,32 +723,28 @@ class PDiscoTrainerTwoStage:
 
     def _save_snapshot(self, epoch, optimizer_state_dict, save_best: bool = False, save_last: bool = False) -> None:
         if self.model_ema is not None:
-            model = self.model_ema.module
+            raw_model = self.model_ema
         else:
-            model = self.model
-        raw_model = model.module if hasattr(model, "module") else model
-        snapshot = Snapshot(
-            model_state=raw_model.state_dict(),
-            optimizer_state=optimizer_state_dict,
-            finished_epoch=epoch,
-        )
+            raw_model = self.model
         # save snapshot
-        snapshot = asdict(snapshot)
+        snapshot = {
+            "model_state": get_state_dict(raw_model),
+            "optimizer_state": [curr_state_dict for curr_state_dict in optimizer_state_dict] if isinstance(
+                self.optimizer,
+                list) else optimizer_state_dict,
+            "finished_epoch": epoch,
+        }
         if self.is_snapshot_dir:
             save_path_base = self.snapshot_path
         else:
             save_path_base = os.path.dirname(self.snapshot_path)
-        if save_last:
-            save_path = os.path.join(save_path_base, f"snapshot_final.pt")
-            torch.save(snapshot, save_path)
         if save_best:
             save_path = os.path.join(save_path_base, f"snapshot_best.pt")
-            torch.save(snapshot, save_path)
-        if not save_best and not save_last:
+        elif save_last:
+            save_path = os.path.join(save_path_base, f"snapshot_final.pt")
+        else:
             save_path = os.path.join(save_path_base, f"snapshot_{epoch}.pt")
-            torch.save(snapshot, save_path)
-
-        print(f"Snapshot saved at epoch {epoch}")
+        save_on_master(snapshot, save_path)
 
     def finish_logging(self):
         for logger in self.loggers:
