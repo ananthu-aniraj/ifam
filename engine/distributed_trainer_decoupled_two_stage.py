@@ -309,6 +309,7 @@ class MaskedViTTrainer:
         if self.eval_only:
             return
         self.optimizer.load_state_dict(snapshot.optimizer_state)
+        self.scaler.load_state_dict(snapshot.scaler_state)
         self.epochs_run = snapshot.finished_epoch
         self.scheduler.step(snapshot.finished_epoch)
         print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
@@ -468,6 +469,7 @@ class MaskedViTTrainer:
             "optimizer_state": [curr_state_dict for curr_state_dict in optimizer_state_dict] if isinstance(
                 self.optimizer,
                 list) else optimizer_state_dict,
+            "scaler_state": self.scaler.state_dict(),
             "finished_epoch": epoch,
         }
         if self.is_snapshot_dir:
