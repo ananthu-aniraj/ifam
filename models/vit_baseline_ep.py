@@ -47,7 +47,8 @@ class BaselineViTEP(torch.nn.Module):
             raise ValueError("pooling_type must be one of 'cls', 'gap', 'gap_cls', 'ep', or 'aim'")
         self.h_fmap = int(self.patch_embed.img_size[0] // self.patch_embed.patch_size[0])
         self.w_fmap = int(self.patch_embed.img_size[1] // self.patch_embed.patch_size[1])
-        self._init_weights_head()
+        if self.pooling_type != "aim":
+            self._init_weights_head()
         self.return_transformer_qkv = False
 
     def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
