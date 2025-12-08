@@ -7,18 +7,18 @@ from torchvision import datasets
 
 def load_train_test_datasets(args, train_transforms, test_transforms):
     if args.dataset == 'cub':
-        dataset_train = FineGrainedBirdClassificationDataset(args.data_path, split=args.train_split, mode='train',
+        dataset_train = FineGrainedBirdClassificationDataset(args.data_path, split='train',
                                                              transform=train_transforms,
                                                              image_sub_path=args.image_sub_path_train)
-        dataset_test = FineGrainedBirdClassificationDataset(args.data_path, mode=args.eval_mode,
+        dataset_test = FineGrainedBirdClassificationDataset(args.data_path, split=args.eval_mode,
                                                             transform=test_transforms,
                                                             image_sub_path=args.image_sub_path_test)
         num_cls = dataset_train.num_classes
 
     elif args.dataset == 'waterbirds':
-        dataset_train = WaterBirdsDataset(args.data_path, mode='train',
+        dataset_train = WaterBirdsDataset(args.data_path, split='train',
                                           transform=train_transforms, image_sub_path=args.image_sub_path_train)
-        dataset_test = WaterBirdsDataset(args.data_path, mode=args.eval_mode,
+        dataset_test = WaterBirdsDataset(args.data_path, split=args.eval_mode,
                                          transform=test_transforms, image_sub_path=args.image_sub_path_test)
         num_cls = dataset_train.num_classes
 
