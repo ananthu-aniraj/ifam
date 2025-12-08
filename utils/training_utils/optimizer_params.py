@@ -94,14 +94,14 @@ def layer_group_matcher_baseline(args, model, dataset_train):
     weight_decay = calculate_weight_decay(args, dataset_train)
     scratch_layers = ["head.", "fc.", "attn_pool.", "sim_pool", "fc_norm", "efficient_pool"]
     scratch_parameters = []
-    no_weight_decay_params_scratch = []
+    no_weight_decay_params_scratch = ["efficient_pool.cls_token"]
     finetune_parameters = []
     no_weight_decay_params_bb = []
     for name, p in model.named_parameters():
 
         if any(x in name for x in scratch_layers):
             print("scratch layer_name: " + name)
-            if p.ndim == 1:
+            if p.ndim == 1 or name in no_weight_decay_params_scratch:
                 no_weight_decay_params_scratch.append(p)
             else:
                 scratch_parameters.append(p)
