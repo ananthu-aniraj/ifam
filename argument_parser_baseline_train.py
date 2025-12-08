@@ -130,6 +130,15 @@ def parse_args():
     parser.add_argument('--wandb_entity', default='', type=str)
     parser.add_argument('--wandb_mode', default='online', type=str, choices=['online', 'offline'])
 
+    # BCE Loss (for multi-class classification) from timm
+    parser.add_argument('--use_bce_loss', default=False, action='store_true')
+    parser.add_argument('--bce-sum', action='store_true', default=False,
+                        help='Sum over classes when using BCE loss.')
+    parser.add_argument('--bce-target-thresh', type=float, default=None,
+                        help='Threshold for binarizing softened BCE targets (default: None, disabled).')
+    parser.add_argument('--bce-pos-weight', type=float, default=None,
+                        help='Positive weighting for BCE loss.')
+
     # * Resume training params
     parser.add_argument('--resume_training', action='store_true', default=False)
     parser.add_argument('--wandb_resume_id', default=None, type=str)
