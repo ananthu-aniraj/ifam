@@ -36,6 +36,8 @@ class BaselineViTEP(torch.nn.Module):
         self.fc_norm = init_model.fc_norm
         if pooling_type == 'ep':
             self.efficient_pool = EfficientProbing(dim=init_model.embed_dim, num_queries=32)  # EP_32
+        else:
+            self.efficient_pool = torch.nn.Identity()
         if pooling_type == "cls" or pooling_type == "gap" or pooling_type == "ep":
             self.head = nn.Linear(init_model.embed_dim, num_classes)
         elif pooling_type == "gap_cls":
@@ -92,7 +94,7 @@ class BaselineViTEP(torch.nn.Module):
         x = self.norm(x)
         if self.pooling_type == "ep":
             x = self.efficient_pool(x[:, self.num_prefix_tokens:, :])
-        if self.pooling_type == "cls":
+        elif self.pooling_type == "cls":
             x = x[:, 0, :]
         elif self.pooling_type == "gap":
             x = x[:, self.num_prefix_tokens:, :].mean(dim=1)
