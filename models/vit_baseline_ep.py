@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 from timm.layers import trunc_normal_
-from layers import EfficientProbing
+from layers import EfficientProbing, AttentionPoolingClassifier
 
 
 class BaselineViTEP(torch.nn.Module):
@@ -40,8 +40,11 @@ class BaselineViTEP(torch.nn.Module):
             self.head = nn.Linear(init_model.embed_dim, num_classes)
         elif pooling_type == "gap_cls":
             self.head = nn.Linear(init_model.embed_dim * 2, num_classes)
+        elif pooling_type == "aim":
+            self.aim_head = AttentionPoolingClassifier(dim=init_model.embed_dim,
+                                                       out_features=num_classes)
         else:
-            raise ValueError("pooling_type must be one of 'cls', 'gap', 'gap_cls', 'ep'")
+            raise ValueError("pooling_type must be one of 'cls', 'gap', 'gap_cls', 'ep', or 'aim'")
         self.h_fmap = int(self.patch_embed.img_size[0] // self.patch_embed.patch_size[0])
         self.w_fmap = int(self.patch_embed.img_size[1] // self.patch_embed.patch_size[1])
         self._init_weights_head()
@@ -96,12 +99,17 @@ class BaselineViTEP(torch.nn.Module):
             x = x[:, 0, :]
         elif self.pooling_type == "gap":
             x = x[:, self.num_prefix_tokens:, :].mean(dim=1)
+        elif self.pooling_type == "aim":
+            x = x[:, self.num_prefix_tokens:, :]
         else:
             x = torch.cat([x[:, 0, :], x[:, self.num_prefix_tokens:, :].mean(dim=1)], dim=1)
         return x
 
     def forward_head(self, x: torch.Tensor) -> torch.Tensor:
         # Classification head
+        if self.pooling_type == "aim":
+            x = self.aim_head(x)
+            return x
         x = self.fc_norm(x)
         x = self.head(x)
         return x

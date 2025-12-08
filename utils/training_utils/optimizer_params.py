@@ -92,8 +92,8 @@ def layer_group_matcher_baseline(args, model, dataset_train):
     :return: param_groups: Parameters grouped into different groups
     """
     weight_decay = calculate_weight_decay(args, dataset_train)
-    scratch_layers = ["head.", "fc.", "attn_pool.", "sim_pool", "fc_norm", "efficient_pool"]
-    scratch_layers_no_wd = ["efficient_pool.cls_token"]
+    scratch_layers = ["head.", "fc.", "attn_pool.", "sim_pool", "fc_norm", "efficient_pool", "aim_head"]
+    scratch_layers_no_wd = ["efficient_pool.cls_token", "aim_head.cls_token"]
     scratch_parameters = []
     no_weight_decay_params_scratch = []
     finetune_parameters = []
