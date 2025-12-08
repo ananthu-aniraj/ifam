@@ -41,7 +41,7 @@ def baseline_train_eval():
     model = model.to(local_rank, non_blocking=True)
 
     # Load the loss function
-    loss_fn, mixup_fn = load_classification_loss(args, dataset_train, num_cls)
+    loss_fn, mixup_fn = load_classification_loss(args, dataset_train)
 
     # Load the optimizer and scheduler
     param_groups, weight_decay = layer_group_matcher_baseline(args, model, dataset_train)
