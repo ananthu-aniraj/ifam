@@ -9,7 +9,7 @@ import torchmetrics
 from torch.distributed import destroy_process_group
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torch.utils.data.distributed import DistributedSampler
 from timm.data import Mixup
 
@@ -20,7 +20,8 @@ from utils.wandb_params import init_wandb
 from utils.training_utils.ddp_utils import ddp_setup, set_seeds, get_state_dict, save_on_master
 from utils.training_utils.engine_utils import AverageMeter
 
-amp_dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported(including_emulation=False) else 'float16'  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+amp_dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported(
+    including_emulation=False) else 'float16'  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 # note: float16 data type will automatically use a GradScaler
 pt_dtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[amp_dtype]
 
@@ -54,6 +55,7 @@ class BaselineTrainer:
         self._init_ddp(use_ddp)
         self.model = model
         self.num_classes = model.num_classes
+        self.num_workers = num_workers
         # Top-k accuracy metrics for evaluation
         self._init_accuracy_metrics()
         self._init_loss_dict()
@@ -62,7 +64,8 @@ class BaselineTrainer:
         self.test_dataset = test_dataset
         self.batch_size = batch_size
         self.eval_only = eval_only
-        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers, drop_last=True, shuffle=True)
+        self.train_loader = self._prepare_dataloader(train_dataset, num_workers=num_workers, drop_last=True,
+                                                     shuffle=True)
         self.test_loader = self._prepare_dataloader(test_dataset, num_workers=num_workers, drop_last=False)
         if len(loss_fn) == 1:
             self.loss_fn_train = self.loss_fn_eval = loss_fn[0]
@@ -311,7 +314,7 @@ class BaselineTrainer:
         # Speed up gradient accumulation by only syncing between GPUs every accum_steps
         if train and self.use_ddp:
             self.model.require_backward_grad_sync = (
-                        (curr_iter + 1) % self.accum_steps == 0 or curr_iter == len(self.train_loader) - 1)
+                    (curr_iter + 1) % self.accum_steps == 0 or curr_iter == len(self.train_loader) - 1)
 
         with torch.set_grad_enabled(train), torch.amp.autocast(device_type="cuda", dtype=self.pt_dtype):
 
@@ -340,22 +343,11 @@ class BaselineTrainer:
 
         return outputs, loss.item()
 
-    def _run_epoch(self, epoch: int, dataloader: DataLoader, train: bool = True):
-        if self.use_ddp:
-            dataloader.sampler.set_epoch(epoch)
-
-        last_accum_steps = len(dataloader) % self.accum_steps
-        updates_per_epoch = len(dataloader) // self.accum_steps + (1 if last_accum_steps > 0 else 0)
-        num_updates = (epoch - 1) * updates_per_epoch
-        last_batch_idx = len(dataloader) - 1
-
+    def reset_metrics(self):
         for key in self.loss_dict_train:
             self.loss_dict_train[key].reset()
         for key in self.loss_dict_val:
             self.loss_dict_val[key].reset()
-        accuracies_dict = {}
-        accuracies_dict_per_class = {}
-        # Compute metrics for evaluation
         for key in self.acc_dict_train.keys():
             self.acc_dict_train[key].reset()
         for key in self.acc_dict_test.keys():
@@ -364,11 +356,24 @@ class BaselineTrainer:
             self.per_class_acc_train[key].reset()
         for key in self.per_class_acc_test.keys():
             self.per_class_acc_test[key].reset()
-
         for key in self.auroc_train.keys():
             self.auroc_train[key].reset()
         for key in self.auroc_test.keys():
             self.auroc_test[key].reset()
+
+    def _run_epoch(self, epoch: int, dataloader: DataLoader, train: bool = True, reset_metrics: bool = True):
+        if self.use_ddp:
+            dataloader.sampler.set_epoch(epoch)
+
+        last_accum_steps = len(dataloader) % self.accum_steps
+        updates_per_epoch = len(dataloader) // self.accum_steps + (1 if last_accum_steps > 0 else 0)
+        num_updates = (epoch - 1) * updates_per_epoch
+        last_batch_idx = len(dataloader) - 1
+        accuracies_dict = {}
+        accuracies_dict_per_class = {}
+        # Compute metrics for evaluation
+        if reset_metrics:
+            self.reset_metrics()
 
         for it, mini_batch in enumerate(dataloader):
             source = mini_batch[0]
@@ -473,6 +478,17 @@ class BaselineTrainer:
             self.current_epoch = epoch
             self.model.train()
             train_loss, acc_dict_train, _ = self._run_epoch(epoch, self.train_loader, train=True)
+
+            # In case the test set is larger than the subset assigned to each GPU
+            if self.use_ddp and (len(self.test_loader.sampler) * self.world_size < len(self.test_loader.dataset)):
+                aux_val_dataset = Subset(self.test_loader.dataset,
+                                         range(len(self.test_loader.sampler) * self.world_size,
+                                               len(self.test_loader.dataset)))
+                aux_val_loader = torch.utils.data.DataLoader(
+                    aux_val_dataset, batch_size=self.batch_size, shuffle=False,
+                    num_workers=self.num_workers, pin_memory=True)
+                train_loss, acc_dict_train, _ = self._run_epoch(epoch, aux_val_loader, train=False,
+                                                                reset_metrics=False)
 
             logging_dict = {"epoch": epoch,
                             'base_lr': self.optimizer.param_groups[0]['lr'],
@@ -603,7 +619,8 @@ def launch_baseline_trainer(model: torch.nn.Module,
                               log_freq=log_freq,
                               use_amp=use_amp,
                               grad_norm_clip=grad_norm_clip, max_epochs=epochs, num_workers=num_workers,
-                              mixup_fn=mixup_fn, eval_only=eval_only, use_ddp=use_ddp, grad_accumulation_steps=grad_accumulation_steps,
+                              mixup_fn=mixup_fn, eval_only=eval_only, use_ddp=use_ddp,
+                              grad_accumulation_steps=grad_accumulation_steps,
                               averaging_params=averaging_params)
     if eval_only:
         trainer.test_only()
