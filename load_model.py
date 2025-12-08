@@ -5,7 +5,7 @@ from timm.models import create_model
 from torchvision.models import get_model
 from models import BaselineViT, \
     FullTwoStageModelDoubleClassify, FullTwoStageModelDoubleClassifyHF, BaselineDInoV2HF, LateMaskViT, \
-    AttnMaskViTDecoupled
+    AttnMaskViTDecoupled, BaselineViTEP
 from models.selfpatch_vision_transformer import vit_small_sp, load_pretrained_weights_sp
 from utils import load_json
 
@@ -176,7 +176,7 @@ def init_model_baseline(base_model, args, num_cls):
             torch.nn.init.constant_(base_model.fc.bias, 0.)
 
     if 'vit' in args.model_arch:
-        base_model = BaselineViT(base_model, num_classes=num_cls, pooling_type=args.pooling_type)
+        base_model = BaselineViTEP(base_model, num_classes=num_cls, pooling_type=args.pooling_type)
     return base_model
 
 
