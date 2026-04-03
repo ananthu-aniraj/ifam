@@ -1,6 +1,6 @@
 # Two-stage Vision Transformers and Hard Masking offer Robust Object Representations
 
-Implementation of the paper "Two-stage Vision Transformers and Hard Masking offer Robust Object Representations"
+Implementation of the paper "Two-stage Vision Transformers and Hard Masking offer Robust Object Representations" accepted at ICPR 2026.
 
 [[`Arxiv`]](https://arxiv.org/abs/2506.08915)
 
