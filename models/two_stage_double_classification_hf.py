@@ -1,23 +1,45 @@
 import torch
-from typing import List
+from typing import List, Union
 from transformers.models.dinov2.configuration_dinov2 import Dinov2Config
+from huggingface_hub import PyTorchModelHubMixin
 from .individual_landmark_vit_2_stage_mod_hf import DinoV2PDiscoHF
 from .attn_mask_vit_2_stage_hf import DinoV2ModelAttnMask2Stage
 
 
-class FullTwoStageModelDoubleClassifyHF(torch.nn.Module):
-    def __init__(self, init_model: torch.nn.Module, config: Dinov2Config, num_landmarks: int = 8,
-                 num_classes: int = 200, softmax_temperature: float = 1.0, part_dropout: float = 0.3,
-                 part_dropout_stage_2: float = 0.3, gumbel_softmax: bool = False,
-                 part_logits_threshold: dict = None, use_soft_masks: bool = False) -> None:
+class FullTwoStageModelDoubleClassifyHF(torch.nn.Module, PyTorchModelHubMixin):
+    def __init__(self, 
+                 init_model: Union[torch.nn.Module, str] = None, 
+                 config: Union[Dinov2Config, dict] = None, 
+                 num_landmarks: int = 8,
+                 num_classes: int = 200, 
+                 softmax_temperature: float = 1.0, 
+                 part_dropout: float = 0.3,
+                 part_dropout_stage_2: float = 0.3, 
+                 gumbel_softmax: bool = False,
+                 part_logits_threshold: dict = None, 
+                 use_soft_masks: bool = False,
+                 base_model_name_or_path: str = 'microsoft/rad-dino') -> None:
         super().__init__()
+
+        if isinstance(init_model, str):
+            base_model_name_or_path = init_model
+            init_model = None
+
+        if config is None:
+            config = Dinov2Config.from_pretrained(base_model_name_or_path)
+        elif isinstance(config, dict):
+            config = Dinov2Config(**config)
+
         self.stage_1 = DinoV2PDiscoHF(config=config, num_landmarks=num_landmarks,
                                       num_classes=num_classes, softmax_temperature=softmax_temperature,
                                       part_dropout=part_dropout, part_dropout_stage_2=part_dropout_stage_2,
                                       part_logits_threshold=part_logits_threshold, gumbel_softmax=gumbel_softmax)
         self.stage_2 = DinoV2ModelAttnMask2Stage(config=config, num_classes=num_classes, use_soft_masks=use_soft_masks)
-        self.stage_1.load_state_dict(init_model.state_dict(), strict=False)
-        self.stage_2.load_state_dict(init_model.state_dict(), strict=False)
+        
+        if init_model is not None:
+            self.stage_1.load_state_dict(init_model.state_dict(), strict=False)
+            self.stage_2.load_state_dict(init_model.state_dict(), strict=False)
+
         self.feature_dim = config.hidden_size
         self.num_landmarks = num_landmarks
         self.num_classes = num_classes

@@ -1,15 +1,46 @@
 import torch
-from typing import List
+from typing import List, Union
+from huggingface_hub import PyTorchModelHubMixin
 from .individual_landmark_vit_2_stage_mod import IndividualLandmarkViT2StageMod
 from .attn_mask_vit_2_stage import AttnMaskViT2Stage
 
 
-class FullTwoStageModelDoubleClassify(torch.nn.Module):
-    def __init__(self, init_model_stage_1: torch.nn.Module, init_model_stage_2: torch.nn.Module, num_landmarks: int = 8,
-                 num_classes: int = 200, return_transformer_qkv: bool = False, gumbel_softmax: bool = True,
-                 softmax_temperature: float = 1.0, part_dropout: float = 0.3, part_dropout_stage_2: float = 0.3,
-                 part_logits_threshold: dict = None, use_soft_masks: bool = False) -> None:
+class FullTwoStageModelDoubleClassify(torch.nn.Module, PyTorchModelHubMixin):
+    def __init__(self, 
+                 init_model_stage_1: Union[torch.nn.Module, str] = None, 
+                 init_model_stage_2: Union[torch.nn.Module, str] = None, 
+                 num_landmarks: int = 8,
+                 num_classes: int = 200, 
+                 return_transformer_qkv: bool = False, 
+                 gumbel_softmax: bool = True,
+                 softmax_temperature: float = 1.0, 
+                 part_dropout: float = 0.3, 
+                 part_dropout_stage_2: float = 0.3,
+                 part_logits_threshold: dict = None, 
+                 use_soft_masks: bool = False,
+                 model_arch: str = 'vit_base_patch14_reg4_dinov2.lvd142m', 
+                 img_size: int = 518) -> None:
         super().__init__()
+
+        if isinstance(init_model_stage_1, str):
+            model_arch = init_model_stage_1
+            init_model_stage_1 = None
+        if isinstance(init_model_stage_2, str):
+            init_model_stage_2 = None
+
+        from timm import create_model
+        if init_model_stage_1 is None:
+            init_model_stage_1 = create_model(
+                model_arch,
+                pretrained=False,
+                img_size=img_size,
+            )
+        if init_model_stage_2 is None:
+            init_model_stage_2 = create_model(
+                model_arch,
+                pretrained=False,
+                img_size=img_size,
+            )
 
         self.stage_1 = IndividualLandmarkViT2StageMod(init_model=init_model_stage_1, num_landmarks=num_landmarks,
                                                       num_classes=num_classes, part_dropout=part_dropout,

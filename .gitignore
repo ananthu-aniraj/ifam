@@ -38,3 +38,4 @@ wheels/
 *.tsv
 wandb/
 exps/
+hf_models/

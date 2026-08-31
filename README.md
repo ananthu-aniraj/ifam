@@ -137,6 +137,32 @@ The dataset can be downloaded from [here](https://github.com/MadryLab/background
 The data will be downloaded in the correct folder structure. No additional steps are required.
 
 
+# Hugging Face Model Checkpoints
+
+We have hosted the pre-trained checkpoints for the IFAM framework models on the Hugging Face Model Hub:
+- **Waterbirds (K=4 parts):** [ananthu-aniraj/ifam-waterbirds-k4](https://huggingface.co/ananthu-aniraj/ifam-waterbirds-k4)
+- **Waterbirds (K=8 parts):** [ananthu-aniraj/ifam-waterbirds-k8](https://huggingface.co/ananthu-aniraj/ifam-waterbirds-k8)
+- **CUB (K=8 parts):** [ananthu-aniraj/ifam-cub-k8](https://huggingface.co/ananthu-aniraj/ifam-cub-k8)
+- **Metashifts (K=8 parts):** [ananthu-aniraj/ifam-metashift-k8](https://huggingface.co/ananthu-aniraj/ifam-metashift-k8)
+- **SIIM-ACR (K=8 parts):** [ananthu-aniraj/ifam-siim-acr-k8](https://huggingface.co/ananthu-aniraj/ifam-siim-acr-k8)
+
+### Loading Checkpoints
+
+Because the model class inherits from `PyTorchModelHubMixin`, you can load any of these checkpoints directly via `from_pretrained`:
+
+```python
+from models import FullTwoStageModelDoubleClassify, FullTwoStageModelDoubleClassifyHF
+
+# To load CUB, Waterbirds, or Metashifts models (timm-based backbones):
+model = FullTwoStageModelDoubleClassify.from_pretrained("ananthu-aniraj/ifam-waterbirds-k8")
+model.eval()
+
+# To load the SIIM-ACR model (transformers-based backbone):
+model_hf = FullTwoStageModelDoubleClassifyHF.from_pretrained("ananthu-aniraj/ifam-siim-acr-k8")
+model_hf.eval()
+```
+
+
 # Training
 The details of running the training script can be found in the [training instructions](training_instructions.md) file.
 
