@@ -139,7 +139,9 @@ The data will be downloaded in the correct folder structure. No additional steps
 
 # Hugging Face Model Checkpoints
 
-We have hosted the pre-trained checkpoints for the IFAM framework models on the Hugging Face Model Hub:
+All the pre-trained checkpoints are grouped together in our official [Hugging Face Collection](https://huggingface.co/collections/ananthu-aniraj/ifam-models).
+
+We have hosted the checkpoints on the Hugging Face Model Hub:
 - **Waterbirds (K=4 parts):** [ananthu-aniraj/ifam-waterbirds-k4](https://huggingface.co/ananthu-aniraj/ifam-waterbirds-k4)
 - **Waterbirds (K=8 parts):** [ananthu-aniraj/ifam-waterbirds-k8](https://huggingface.co/ananthu-aniraj/ifam-waterbirds-k8)
 - **CUB (K=8 parts):** [ananthu-aniraj/ifam-cub-k8](https://huggingface.co/ananthu-aniraj/ifam-cub-k8)
