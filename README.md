@@ -2,7 +2,7 @@
 
 Implementation of the paper "Two-stage Vision Transformers and Hard Masking offer Robust Object Representations" accepted at ICPR 2026 as an oral presentation.
 
-[[`Arxiv`]](https://arxiv.org/abs/2506.08915)
+[[`Arxiv`]](https://arxiv.org/abs/2506.08915) [[`HF Models 🤗`]](https://huggingface.co/collections/ananthu-aniraj/ifam-models)
 
 <img width="3000" height="2088" alt="new_figure_engineer" src="https://github.com/user-attachments/assets/1aee72e1-9095-406d-9543-c7ab4d18555a" />
 
