@@ -222,7 +222,14 @@ def main():
         # 6. Push to HF Hub
         print(f"Pushing to HF Hub repo: {repo_id}...")
         try:
-            model.push_to_hub(repo_id, token=hf_token)
+            from huggingface_hub import create_repo, upload_folder
+            create_repo(repo_id=repo_id, token=hf_token, exist_ok=True)
+            upload_folder(
+                folder_path=local_hf_dir,
+                repo_id=repo_id,
+                repo_type="model",
+                token=hf_token
+            )
             print(f"[SUCCESS] Model '{name}' uploaded successfully to https://huggingface.co/{repo_id}")
         except Exception as e:
             print(f"[ERROR] Failed to upload '{name}': {e}")
