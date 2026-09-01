@@ -147,6 +147,7 @@ We have hosted the checkpoints on the Hugging Face Model Hub:
 - **CUB (K=8 parts):** [ananthu-aniraj/ifam-cub-k8](https://huggingface.co/ananthu-aniraj/ifam-cub-k8)
 - **Metashifts (K=8 parts):** [ananthu-aniraj/ifam-metashift-k8](https://huggingface.co/ananthu-aniraj/ifam-metashift-k8)
 - **SIIM-ACR (K=8 parts):** [ananthu-aniraj/ifam-siim-acr-k8](https://huggingface.co/ananthu-aniraj/ifam-siim-acr-k8)
+- **ImageNet-1K (K=1 part):** [ananthu-aniraj/ifam-imagenet-k1](https://huggingface.co/ananthu-aniraj/ifam-imagenet-k1)
 
 ### Loading Checkpoints
 

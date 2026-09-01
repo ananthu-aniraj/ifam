@@ -76,6 +76,20 @@ MODELS_TO_UPLOAD = {
         "description": "iFAM model trained on the SIIM-ACR Pneumothorax Segmentation dataset with 8 parts (K=8).",
         "dataset": "siim_acr",
         "num_parts": 8
+    },
+    "imagenet-k1": {
+        "class": "FullTwoStageModelDoubleClassify",
+        "url": "https://github.com/ananthu-aniraj/ifam/releases/download/ifam-models/1_parts_imagenet_snapshot_best.pt",
+        "kwargs": {
+            "model_arch": "vit_base_patch14_reg4_dinov2.lvd142m",
+            "img_size": 224,
+            "num_landmarks": 1,
+            "num_classes": 1000,
+            "gumbel_softmax": True,
+        },
+        "description": "iFAM model trained on the ImageNet-1K dataset with 1 part (K=1).",
+        "dataset": "imagenet",
+        "num_parts": 1
     }
 }
 
