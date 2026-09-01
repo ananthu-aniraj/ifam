@@ -17,7 +17,7 @@ MODELS_TO_UPLOAD = {
             "num_classes": 2,
             "gumbel_softmax": True,
         },
-        "description": "IFAM model trained on the Waterbirds dataset with 4 parts (K=4).",
+        "description": "iFAM model trained on the Waterbirds dataset with 4 parts (K=4).",
         "dataset": "waterbirds",
         "num_parts": 4
     },
@@ -31,7 +31,7 @@ MODELS_TO_UPLOAD = {
             "num_classes": 2,
             "gumbel_softmax": True,
         },
-        "description": "IFAM model trained on the Waterbirds dataset with 8 parts (K=8).",
+        "description": "iFAM model trained on the Waterbirds dataset with 8 parts (K=8).",
         "dataset": "waterbirds",
         "num_parts": 8
     },
@@ -45,7 +45,7 @@ MODELS_TO_UPLOAD = {
             "num_classes": 200,
             "gumbel_softmax": True,
         },
-        "description": "IFAM model trained on the CUB (Caltech-UCSD Birds-200-2011) dataset with 8 parts (K=8).",
+        "description": "iFAM model trained on the CUB (Caltech-UCSD Birds-200-2011) dataset with 8 parts (K=8).",
         "dataset": "cub",
         "num_parts": 8
     },
@@ -59,7 +59,7 @@ MODELS_TO_UPLOAD = {
             "num_classes": 2,
             "gumbel_softmax": True,
         },
-        "description": "IFAM model trained on the Metashifts dataset with 8 parts (K=8).",
+        "description": "iFAM model trained on the Metashifts dataset with 8 parts (K=8).",
         "dataset": "metashift",
         "num_parts": 8
     },
@@ -71,8 +71,9 @@ MODELS_TO_UPLOAD = {
             "num_landmarks": 8,
             "num_classes": 2,
             "gumbel_softmax": True,
+            "image_size": 518,
         },
-        "description": "IFAM model trained on the SIIM-ACR Pneumothorax Segmentation dataset with 8 parts (K=8).",
+        "description": "iFAM model trained on the SIIM-ACR Pneumothorax Segmentation dataset with 8 parts (K=8).",
         "dataset": "siim_acr",
         "num_parts": 8
     }
@@ -88,7 +89,7 @@ def download_file(url, dest):
 def generate_model_card(local_dir, name, config, repo_id):
     desc = config["description"]
     class_name = config["class"]
-    img_size = config["kwargs"].get("img_size", 518)
+    img_size = config["kwargs"].get("img_size", config["kwargs"].get("image_size", 518))
     num_parts = config["num_parts"]
     dataset = config["dataset"]
 
@@ -106,9 +107,9 @@ arxiv: 2506.08915
 library_name: generic
 ---
 
-# IFAM ({name}) Model Checkpoint
+# iFAM ({name}) Model Checkpoint
 
-This is the official pre-trained checkpoint of the **IFAM (Iterative Focus and Attention Masking)** framework, proposed in the paper **"Two-stage Vision Transformers and Hard Masking offer Robust Object Representations"** (accepted as an oral presentation at ICPR 2026).
+This is the official pre-trained checkpoint of the **iFAM (Inherently Faithful Attention Maps for Vision Transformers)** framework, proposed in the paper **"Two-stage Vision Transformers and Hard Masking offer Robust Object Representations"** (accepted as an oral presentation at ICPR 2026).
 
 - **Paper:** [Two-stage Vision Transformers and Hard Masking offer Robust Object Representations](https://arxiv.org/abs/2506.08915)
 - **Repository:** [GitHub - ananthu-aniraj/ifam](https://github.com/ananthu-aniraj/ifam)
@@ -116,7 +117,7 @@ This is the official pre-trained checkpoint of the **IFAM (Iterative Focus and A
 ## Model Description
 {desc}
 
-The IFAM framework is a two-stage approach:
+The iFAM framework is a two-stage approach:
 1. **Stage 1 (Selector):** Processes the full image to discover object parts and identify task-relevant regions.
 2. **Stage 2 (Predictor):** Restricts its receptive field to the selected regions using input attention masking, preventing spurious background details from affecting the classification.
 

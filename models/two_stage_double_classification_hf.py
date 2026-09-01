@@ -18,6 +18,7 @@ class FullTwoStageModelDoubleClassifyHF(torch.nn.Module, PyTorchModelHubMixin):
                  gumbel_softmax: bool = False,
                  part_logits_threshold: dict = None, 
                  use_soft_masks: bool = False,
+                 image_size: int = 518,
                  base_model_name_or_path: str = 'microsoft/rad-dino') -> None:
         super().__init__()
 
@@ -26,9 +27,13 @@ class FullTwoStageModelDoubleClassifyHF(torch.nn.Module, PyTorchModelHubMixin):
             init_model = None
 
         if config is None:
-            config = Dinov2Config.from_pretrained(base_model_name_or_path)
+            config = Dinov2Config.from_pretrained(base_model_name_or_path, image_size=image_size)
         elif isinstance(config, dict):
+            if "image_size" not in config or config["image_size"] != image_size:
+                config["image_size"] = image_size
             config = Dinov2Config(**config)
+        elif isinstance(config, Dinov2Config):
+            config.image_size = image_size
 
         self.stage_1 = DinoV2PDiscoHF(config=config, num_landmarks=num_landmarks,
                                       num_classes=num_classes, softmax_temperature=softmax_temperature,

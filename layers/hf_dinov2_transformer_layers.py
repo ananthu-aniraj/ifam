@@ -525,6 +525,14 @@ class Dinov2PreTrainedModel(PreTrainedModel):
     _no_split_modules = ["Dinov2SwiGLUFFN"]
     _supports_sdpa = True
 
+    def get_head_mask(
+        self, head_mask: Optional[torch.Tensor], num_hidden_layers: int, is_attention_chunked: bool = False
+    ) -> Union[torch.Tensor, List[Optional[torch.Tensor]]]:
+        if head_mask is not None:
+            if hasattr(super(), "get_head_mask"):
+                return super().get_head_mask(head_mask, num_hidden_layers, is_attention_chunked)
+        return [None] * num_hidden_layers
+
     def _init_weights(self, module: Union[nn.Linear, nn.Conv2d, nn.LayerNorm]) -> None:
         """Initialize the weights"""
         if isinstance(module, (nn.Linear, nn.Conv2d)):
