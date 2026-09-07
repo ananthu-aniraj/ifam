@@ -68,6 +68,8 @@ class FullTwoStageModelDoubleClassifyHF(torch.nn.Module, PyTorchModelHubMixin):
                 attn_maps_bg = attn_maps_combined[:, -1, :, :].unsqueeze(1)  # [B, 1, H, W]
                 # Set activation of bg to inf in the locations of the parts to remove
                 attn_maps_bg[mask] = float("inf")
+                # Set activation of the parts to remove to -inf
+                attn_maps_fg[:, part_ids_to_remove, :, :] = -float("inf")
                 attn_maps_fg_full = attn_maps_fg.amax(dim=1, keepdim=True)  # [B, 1, H, W]
                 attn_maps_fg_bg_soft = torch.cat([attn_maps_fg_full, attn_maps_bg],
                                                  dim=1)  # [B, 2, H, W]
@@ -78,6 +80,8 @@ class FullTwoStageModelDoubleClassifyHF(torch.nn.Module, PyTorchModelHubMixin):
                                                    memory_format=torch.legacy_contiguous_format).scatter_(
                     1, index,
                     1.0)  # [B, 2, H, W]
+                attn_maps_fg_bg_combined = attn_maps_fg_bg, attn_maps_fg_bg_soft
+                attn_maps_combined = torch.cat([attn_maps_fg, attn_maps_bg], dim=1)
             else:
                 attn_maps_fg_bg, attn_maps_fg_bg_soft = attn_maps_fg_bg_combined
         else:
